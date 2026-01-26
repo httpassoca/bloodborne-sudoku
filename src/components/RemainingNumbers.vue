@@ -3,6 +3,8 @@ import { computed } from 'vue'
 
 const props = defineProps({
   grid: { type: Array, required: true }, // 9x9 numbers (0-9)
+  title: { type: String, default: 'Remaining' },
+  allText: { type: String, default: 'All numbers placed.' },
 })
 
 const counts = computed(() => {
@@ -36,7 +38,7 @@ const anyRemaining = computed(() => slots.value.some((s) => s.show))
 
 <template>
   <div class="rem" aria-label="Remaining numbers">
-    <div class="title">Remaining</div>
+    <div class="title">{{ title }}</div>
 
     <div class="square">
       <div class="grid">
@@ -52,7 +54,7 @@ const anyRemaining = computed(() => slots.value.some((s) => s.show))
       </div>
     </div>
 
-    <div v-if="!anyRemaining" class="all">All numbers placed.</div>
+    <div v-if="!anyRemaining" class="all">{{ allText }}</div>
   </div>
 </template>
 

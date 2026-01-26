@@ -5,6 +5,7 @@ import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
 import { DIFFICULTIES, computeConflicts, generatePuzzle, isSolved } from './lib/sudoku'
 import { nextLogicalMove } from './lib/logicSolver'
+import { LANGS, t as tt } from './i18n'
 
 function makeCell(value, given) {
   return {
@@ -20,6 +21,22 @@ function gridToCells(puzzleGrid) {
 }
 
 const difficultyKey = ref('easy')
+
+const lang = ref(localStorage.getItem('bbs_lang') || 'en')
+watch(
+  lang,
+  () => {
+    localStorage.setItem('bbs_lang', lang.value)
+  },
+  { immediate: true }
+)
+
+function t(key, params) {
+  return tt(lang.value, key, params)
+}
+
+const langOptions = LANGS
+
 
 // theme
 const theme = ref(localStorage.getItem('bbs_theme') || 'dark')
@@ -49,7 +66,7 @@ const state = reactive({
     speedMs: 450,
     speedPreset: 'normal',
     highlightKey: '',
-    message: 'The companion is quiet.',
+    message: '',
     decision: { r: -1, c: -1, n: 0, kind: '' },
   },
 })
@@ -65,7 +82,7 @@ const speedPresets = [
   { key: 'normal', label: 'Normal (1.2s)', ms: 1200 },
   { key: 'fast', label: 'Fast (650ms)', ms: 650 },
   { key: 'blitz', label: 'Blitz (350ms)', ms: 350 },
-  { key: 'frenzy', label: 'Frenzy (180ms)', ms: 180 },
+  { key: 'frenzy', label: 'Frenzy (180ms)', ms: 180 }
 ]
 
 function applySpeedPreset() {
@@ -77,6 +94,10 @@ watch(
   () => applySpeedPreset(),
   { immediate: true }
 )
+
+const difficultiesLocalized = computed(() => {
+  return DIFFICULTIES.map((d) => ({ key: d.key, label: t(`diff.${d.key}`) }))
+})
 
 
 function bestKey(diffKey) {
@@ -122,7 +143,7 @@ function newHunt() {
 
   state.companion.running = false
   state.companion.highlightKey = ''
-  state.companion.message = 'The companion is quiet.'
+  state.companion.message = t('companion.quiet')
 
   loadBestScore()
 }
@@ -379,7 +400,21 @@ function companionStep() {
   if (move) {
     const ok = applyStep(move.r, move.c, move.n)
     if (ok) {
-      highlightStep(move.r, move.c, `Companion: ${move.detail}`, move.n, move.kind)
+      // Localized companion explanation
+      let msg = ''
+      if (move.kind === 'naked-single') {
+        msg = t('companion.nakedSingle', { r: move.r, c: move.c, n: move.n })
+      } else if (move.kind === 'hidden-single') {
+        const u = move.unit
+        if (u?.type === 'row') msg = t('companion.hiddenRow', { r: move.r, c: move.c, n: move.n, idx: u.index })
+        else if (u?.type === 'col') msg = t('companion.hiddenCol', { r: move.r, c: move.c, n: move.n, idx: u.index })
+        else if (u?.type === 'box') msg = t('companion.hiddenBox', { r: move.r, c: move.c, n: move.n, br: u.br, bc: u.bc })
+        else msg = t('companion.nakedSingle', { r: move.r, c: move.c, n: move.n })
+      } else {
+        msg = t('companion.nakedSingle', { r: move.r, c: move.c, n: move.n })
+      }
+
+      highlightStep(move.r, move.c, msg, move.n, move.kind)
       tryFinishCheck()
       return true
     }
@@ -395,7 +430,7 @@ function companionStep() {
     highlightStep(
       empty.r,
       empty.c,
-      `Companion: No simple single found. Revealing the next correct value: ${n}.`,
+      t('companion.fallback', { r: empty.r, c: empty.c, n }),
       n,
       'reveal'
     )
@@ -417,7 +452,7 @@ function runCompanionLoop() {
   if (!state.companion.running) return
   const did = companionStep()
   if (!did) {
-    state.companion.message = 'Companion: Nothing to do.'
+    state.companion.message = t('companion.nothing')
     stopCompanion()
     return
   }
@@ -431,7 +466,7 @@ function toggleCompanionKill() {
     return
   }
   state.companion.running = true
-  state.companion.message = 'Companion: Beginning the kill…'
+  state.companion.message = t('companion.begin')
   runCompanionLoop()
 }
 
@@ -492,9 +527,9 @@ onBeforeUnmount(() => {
 })
 
 const statusText = computed(() => {
-  if (state.finished) return `PREY SLAUGHTERED — Score ${state.score}`
-  if (conflicts.value.size) return `${conflicts.value.size} conflicts — your blood sings.`
-  return 'Seek paleblood, to transcend the hunt.'
+  if (state.finished) return t('statusSolved', state.score)
+  if (conflicts.value.size) return t('statusConflicts', conflicts.value.size)
+  return t('statusIdle')
 })
 
 function toggleTheme() {
@@ -512,9 +547,9 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
     <!-- Victory overlay (dismisses on ANY key or click) -->
     <div class="victory" :class="{ show: state.victoryVisible }" :data-burst="victoryBurst" aria-hidden="true">
       <div class="victory-inner">
-        <div class="victory-title">PREY SLAUGHTERED</div>
-        <div class="victory-sub">Score: <b>{{ state.score }}</b> · Best: <b>{{ state.bestScore }}</b></div>
-        <div class="victory-hint">Press any key or click anywhere to continue.</div>
+        <div class="victory-title">{{ t('victoryTitle') }}</div>
+        <div class="victory-sub">{{ t('score') }}: <b>{{ state.score }}</b> · {{ t('best') }}: <b>{{ state.bestScore }}</b></div>
+        <div class="victory-hint">{{ t('victoryHint') }}</div>
       </div>
     </div>
 
@@ -522,14 +557,14 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
       <div class="brand">
         <div class="sigil" aria-hidden="true" />
         <div>
-          <h1>Bloodborne Sudoku</h1>
-          <p class="subtitle">A small hunt of numbers. A large hunt of patience.</p>
+          <h1>{{ t('appTitle') }}</h1>
+          <p class="subtitle">{{ t('subtitle') }}</p>
         </div>
       </div>
 
       <div class="hud">
-        <div class="pill"><span class="pill-label">Score</span><span class="pill-value">{{ state.score || '—' }}</span></div>
-        <div class="pill"><span class="pill-label">Best</span><span class="pill-value">{{ state.bestScore || '—' }}</span></div>
+        <div class="pill"><span class="pill-label">{{ t('score') }}</span><span class="pill-value">{{ state.score || '—' }}</span></div>
+        <div class="pill"><span class="pill-label">{{ t('best') }}</span><span class="pill-value">{{ state.bestScore || '—' }}</span></div>
       </div>
     </header>
 
@@ -550,56 +585,60 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
 
           <!-- Companion explanation (text) -->
           <section class="companion-explain" aria-label="Companion explanation">
-            <div class="companion-explain-title">Companion</div>
+            <div class="companion-explain-title">{{ t('companionTitle') }}</div>
             <div class="companion-explain-text">{{ state.companion.message }}</div>
           </section>
 
           <!-- Instructions (not a dropdown): subtle until hover -->
           <section class="instructions" aria-label="Instructions">
-            <div class="instructions-title">Controls</div>
+            <div class="instructions-title">{{ t('controlsTitle') }}</div>
             <ul class="help">
-              <li><kbd>1</kbd>–<kbd>9</kbd> place number</li>
-              <li><kbd>Shift</kbd> + <kbd>1</kbd>–<kbd>9</kbd> corner draft</li>
-              <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>1</kbd>–<kbd>9</kbd> center draft</li>
-              <li><kbd>Backspace</kbd>/<kbd>Del</kbd> clear</li>
-              <li>Arrow keys move selection</li>
-              <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + arrows extend selection (multi-draft)</li>
+              <li><kbd>1</kbd>–<kbd>9</kbd> {{ t('c_place') }}</li>
+              <li><kbd>Shift</kbd> + <kbd>1</kbd>–<kbd>9</kbd> {{ t('c_corner') }}</li>
+              <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>1</kbd>–<kbd>9</kbd> {{ t('c_center') }}</li>
+              <li><kbd>Backspace</kbd>/<kbd>Del</kbd> {{ t('c_clear') }}</li>
+              <li>{{ t('c_move') }}</li>
+              <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> {{ t('c_multi') }}</li>
             </ul>
           </section>
         </section>
 
         <aside class="sidepanel">
           <div class="sidepanel-section">
-            <div class="sidepanel-title">Hunt Setup</div>
+            <div class="sidepanel-title">{{ t('huntSetup') }}</div>
 
             <div class="setup-row">
-              <CustomSelect v-model="difficultyKey" :options="DIFFICULTIES" label="Difficulty" />
-              <button
-                class="icon-btn"
-                type="button"
-                :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-                title="Toggle theme"
-                @click="toggleTheme"
-              >
-                {{ themeIcon }}
-              </button>
+              <CustomSelect v-model="difficultyKey" :options="difficultiesLocalized" :label="t('difficulty')" />
+
+              <div class="icon-stack">
+                <CustomSelect v-model="lang" :options="langOptions" label="Lang" />
+                <button
+                  class="icon-btn"
+                  type="button"
+                  :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+                  title="Toggle theme"
+                  @click="toggleTheme"
+                >
+                  {{ themeIcon }}
+                </button>
+              </div>
             </div>
 
             <div class="btn-row">
-              <button class="btn" type="button" @click="newHunt">New Hunt</button>
-              <button class="btn ghost" type="button" @click="clearSelected">Clear</button>
+              <button class="btn" type="button" @click="newHunt">{{ t('newHunt') }}</button>
+              <button class="btn ghost" type="button" @click="clearSelected">{{ t('clear') }}</button>
             </div>
 
             <div class="btn-row">
-              <button class="btn danger" type="button" @click="revealSolution">Reveal</button>
+              <button class="btn danger" type="button" @click="revealSolution">{{ t('reveal') }}</button>
               <button class="btn" type="button" @click="toggleCompanionKill">
-                {{ state.companion.running ? 'Stop Companion' : 'Companion Kill' }}
+                {{ state.companion.running ? t('stopCompanion') : t('companionKill') }}
               </button>
             </div>
 
             <div class="speed">
               <div class="speed-head">
-                <span class="speed-label">Companion speed</span>
+                <span class="speed-label">{{ t('companionSpeed') }}</span>
                 <span class="speed-value">{{ (state.companion.speedMs / 1000).toFixed(2) }}s</span>
               </div>
 
@@ -611,23 +650,23 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
             </div>
 
             <div class="companion-log" :class="{ active: state.companion.running }">
-              <div class="companion-title">Companion Log</div>
+              <div class="companion-title">{{ t('companionLog') }}</div>
               <div class="companion-text">{{ state.companion.message }}</div>
-              <div class="companion-hint">Decision is highlighted on the board.</div>
+              <div class="companion-hint">{{ t('companion.decisionHint') }}</div>
             </div>
           </div>
 
           <div class="sidepanel-section">
             <div class="remaining-row">
-              <RemainingNumbers :grid="currentGrid" />
+              <RemainingNumbers :grid="currentGrid" :title="t('remaining')" :all-text="t('allNumbersPlaced')" />
 
               <div class="mini-hud">
                 <div class="pill">
-                  <span class="pill-label">Time</span>
+                  <span class="pill-label">{{ t('time') }}</span>
                   <span class="pill-value">{{ timeLabel }}</span>
                 </div>
                 <div class="pill">
-                  <span class="pill-label">Status</span>
+                  <span class="pill-label">{{ t('status') }}</span>
                   <span class="pill-value">{{ statusText }}</span>
                 </div>
               </div>
@@ -859,6 +898,16 @@ kbd {
   grid-template-columns: 1fr auto;
   gap: 10px;
   align-items: end;
+}
+
+.icon-stack {
+  display: grid;
+  gap: 10px;
+  align-content: end;
+}
+
+.icon-stack :deep(.trigger) {
+  height: 44px;
 }
 
 .icon-btn {
