@@ -37,24 +37,6 @@ function t(key, params) {
 
 const langOptions = LANGS
 
-// Touch/mobile helpers
-const isCoarsePointer = ref(false)
-const mobileEntryMode = ref('value') // 'value' | 'corner' | 'center'
-
-function updatePointerCoarseness() {
-  isCoarsePointer.value = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches
-}
-
-onMounted(() => {
-  updatePointerCoarseness()
-  window.addEventListener('resize', updatePointerCoarseness)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', updatePointerCoarseness)
-})
-
-
 // theme
 const theme = ref(localStorage.getItem('bbs_theme') || 'dark')
 function applyTheme() {
@@ -99,7 +81,7 @@ const speedPresets = [
   { key: 'normal', label: 'Normal (1.2s)', ms: 1200 },
   { key: 'fast', label: 'Fast (650ms)', ms: 650 },
   { key: 'blitz', label: 'Blitz (350ms)', ms: 350 },
-  { key: 'frenzy', label: 'Frenzy (180ms)', ms: 180 }
+  { key: 'frenzy', label: 'Frenzy (180ms)', ms: 180 },
 ]
 
 function applySpeedPreset() {
@@ -116,6 +98,44 @@ const difficultiesLocalized = computed(() => {
   return DIFFICULTIES.map((d) => ({ key: d.key, label: t(`diff.${d.key}`) }))
 })
 
+// Mobile: use device keyboard via a hidden input
+const captureEl = ref(null)
+const entryMode = ref('value') // 'value' | 'corner' | 'center'
+
+function isCoarsePointer() {
+  return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches
+}
+
+function focusCapture() {
+  if (!isCoarsePointer()) return
+  // iOS requires the input to be focusable and not display:none
+  captureEl.value?.focus({ preventScroll: true })
+}
+
+function clearCapture() {
+  if (captureEl.value) captureEl.value.value = ''
+}
+
+function handleCaptureInput(e) {
+  const v = String(e?.target?.value || '')
+  if (!v) return
+
+  // take last digit only
+  const last = v[v.length - 1]
+  clearCapture()
+
+  if (last === '0') {
+    clearSelected()
+    return
+  }
+
+  const n = Number(last)
+  if (!Number.isInteger(n) || n < 1 || n > 9) return
+
+  if (entryMode.value === 'corner') handleNumber(n, 'corner')
+  else if (entryMode.value === 'center') handleNumber(n, 'center')
+  else handleNumber(n, 'value')
+}
 
 function bestKey(diffKey) {
   return `bbs_best_${diffKey}`
@@ -218,15 +238,18 @@ function selectCell({ row, col, mode = 'replace', additive = false }) {
     if (state.multiSelected.has(k)) state.multiSelected.delete(k)
     else state.multiSelected.add(k)
     if (state.multiSelected.size === 0) state.multiSelected = new Set([k])
+    focusCapture()
     return
   }
 
   if (mode === 'extend') {
     state.multiSelected.add(k)
+    focusCapture()
     return
   }
 
   state.multiSelected = new Set([k])
+  focusCapture()
 }
 
 function cellAt(r, c) {
@@ -331,12 +354,6 @@ function clearSelected() {
   if (!cell || cell.given || state.finished) return
   if (cell.value) cell.value = 0
   else clearNotes(cell)
-}
-
-function mobilePlace(n) {
-  if (mobileEntryMode.value === 'corner') handleNumber(n, 'corner')
-  else if (mobileEntryMode.value === 'center') handleNumber(n, 'center')
-  else handleNumber(n, 'value')
 }
 
 function revealSolution() {
@@ -450,13 +467,7 @@ function companionStep() {
   const n = state.solution[empty.r][empty.c]
   const ok = applyStep(empty.r, empty.c, n)
   if (ok) {
-    highlightStep(
-      empty.r,
-      empty.c,
-      t('companion.fallback', { r: empty.r, c: empty.c, n }),
-      n,
-      'reveal'
-    )
+    highlightStep(empty.r, empty.c, t('companion.fallback', { r: empty.r, c: empty.c, n }), n, 'reveal')
     tryFinishCheck()
     return true
   }
@@ -498,7 +509,7 @@ function onKeyDown(e) {
   if (state.victoryVisible) dismissVictoryIfVisible()
 
   const tag = (e.target?.tagName || '').toLowerCase()
-  if (tag === 'input' || tag === 'textarea') return
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'option') return
 
   // Arrow navigation => disable hover until mouse is used again
   if (e.key.startsWith('Arrow')) keyboardNav.value = true
@@ -560,13 +571,25 @@ function toggleTheme() {
 }
 
 const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
-
-// (candidate grid removed)
-
 </script>
 
 <template>
   <div class="app">
+    <!-- Hidden input to trigger the device keyboard on mobile -->
+    <input
+      ref="captureEl"
+      class="capture"
+      type="tel"
+      inputmode="numeric"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false"
+      pattern="[0-9]*"
+      aria-label="Sudoku input"
+      @input="handleCaptureInput"
+    />
+
     <!-- Victory overlay (dismisses on ANY key or click) -->
     <div class="victory" :class="{ show: state.victoryVisible }" :data-burst="victoryBurst" aria-hidden="true">
       <div class="victory-inner">
@@ -606,18 +629,13 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
             @select="(pos) => selectCell(pos)"
           />
 
-          <!-- Mobile keypad (iOS/Android) -->
-          <section v-if="isCoarsePointer" class="keypad" aria-label="Keypad">
-            <div class="keypad-mode">
-              <button class="mode" :class="{ on: mobileEntryMode === 'value' }" type="button" @click="mobileEntryMode = 'value'">123</button>
-              <button class="mode" :class="{ on: mobileEntryMode === 'corner' }" type="button" @click="mobileEntryMode = 'corner'">↖</button>
-              <button class="mode" :class="{ on: mobileEntryMode === 'center' }" type="button" @click="mobileEntryMode = 'center'">◎</button>
-              <button class="mode danger" type="button" @click="clearSelected">⌫</button>
-            </div>
-            <div class="keypad-grid">
-              <button v-for="n in 9" :key="n" class="key" type="button" @click="mobilePlace(n)">{{ n }}</button>
-            </div>
-          </section>
+          <!-- Mobile: entry mode toolbar (similar to sudoku.com) -->
+          <div class="mobile-toolbar">
+            <button class="tool" :class="{ on: entryMode === 'value' }" type="button" @click="entryMode = 'value'; focusCapture()">123</button>
+            <button class="tool" :class="{ on: entryMode === 'corner' }" type="button" @click="entryMode = 'corner'; focusCapture()">↖</button>
+            <button class="tool" :class="{ on: entryMode === 'center' }" type="button" @click="entryMode = 'center'; focusCapture()">◎</button>
+            <button class="tool danger" type="button" @click="() => { clearSelected(); focusCapture() }">⌫</button>
+          </div>
 
           <!-- Companion explanation (text) -->
           <section class="companion-explain" aria-label="Companion explanation">
@@ -681,8 +699,6 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
               <select v-model="state.companion.speedPreset" class="speed-select">
                 <option v-for="p in speedPresets" :key="p.key" :value="p.key">{{ p.label }}</option>
               </select>
-
-              <!-- slider removed: presets only -->
             </div>
 
             <div class="companion-log" :class="{ active: state.companion.running }">
@@ -719,6 +735,52 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
 </template>
 
 <style scoped>
+.capture {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0.01;
+  border: 0;
+  padding: 0;
+  font-size: 16px; /* prevent iOS zoom */
+  background: transparent;
+}
+
+.mobile-toolbar {
+  display: none;
+  gap: 8px;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (pointer: coarse) {
+  .mobile-toolbar {
+    display: grid;
+  }
+}
+
+.tool {
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 78%, transparent);
+  color: var(--bone);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.tool.on {
+  border-color: color-mix(in oklab, var(--gold) 55%, var(--ink));
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--gold) 35%, transparent) inset;
+}
+
+.tool.danger {
+  border-color: color-mix(in oklab, var(--blood) 55%, var(--ink));
+}
+
+/* --- existing styles below (kept from previous file) --- */
+
 .app {
   min-height: 100vh;
   min-height: 100dvh;
@@ -835,7 +897,7 @@ h1 {
   min-width: 0;
   display: grid;
   gap: 10px;
-  overflow: hidden; /* prevent glow/border overflow on small screens */
+  overflow: hidden;
 }
 
 .sidepanel {
@@ -847,59 +909,9 @@ h1 {
   gap: 12px;
 }
 
-/* Ensure the board never exceeds its container */
 .board-wrap :deep(.board) {
   width: 100%;
   max-width: 100%;
-}
-
-.keypad {
-  border-radius: 18px;
-  padding: 10px;
-  background: color-mix(in oklab, var(--panel) 78%, transparent);
-  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
-}
-
-.keypad-mode {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.mode {
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
-  background: color-mix(in oklab, var(--panel) 82%, transparent);
-  color: var(--bone);
-  font-weight: 900;
-  letter-spacing: 0.06em;
-}
-
-.mode.on {
-  border-color: color-mix(in oklab, var(--gold) 55%, var(--ink));
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--gold) 35%, transparent) inset;
-}
-
-.mode.danger {
-  border-color: color-mix(in oklab, var(--blood) 55%, var(--ink));
-}
-
-.keypad-grid {
-  display: grid;
-  grid-template-columns: repeat(9, 1fr);
-  gap: 6px;
-}
-
-.key {
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
-  background: color-mix(in oklab, var(--panel) 86%, transparent);
-  color: var(--bone);
-  font-weight: 900;
-  font-size: 16px;
 }
 
 .companion-explain {
@@ -1106,6 +1118,12 @@ kbd {
   line-height: 1.35;
 }
 
+.companion-hint {
+  margin-top: 8px;
+  opacity: 0.72;
+  font-size: 12px;
+}
+
 .remaining-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1214,10 +1232,6 @@ kbd {
     max-width: 100%;
   }
 
-  .keypad-grid {
-    grid-template-columns: repeat(9, 1fr);
-  }
-
   .remaining-row { grid-template-columns: 1fr; }
 }
 
@@ -1239,16 +1253,6 @@ kbd {
 
   .sidepanel-section {
     padding: 12px 12px;
-  }
-
-  .keypad-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-
-  .key {
-    height: 48px;
-    font-size: 18px;
   }
 }
 </style>
