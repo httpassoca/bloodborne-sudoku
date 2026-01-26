@@ -53,6 +53,11 @@ const state = reactive({
   multiSelected: new Set(['0,0']),
 
   startedAt: Date.now(),
+  errors: 0,
+  history: [], // user move history for undo/companion correction
+  lastCompletes: { rows: new Set(), cols: new Set(), boxes: new Set() },
+  flashKey: '',
+
   finished: false,
   finishedAt: null,
 
@@ -132,9 +137,9 @@ function handleCaptureInput(e) {
   const n = Number(last)
   if (!Number.isInteger(n) || n < 1 || n > 9) return
 
-  if (entryMode.value === 'corner') handleNumber(n, 'corner')
-  else if (entryMode.value === 'center') handleNumber(n, 'center')
-  else handleNumber(n, 'value')
+  if (entryMode.value === 'corner') handleNumber(n, 'corner', 'user')
+  else if (entryMode.value === 'center') handleNumber(n, 'center', 'user')
+  else handleNumber(n, 'value', 'user')
 }
 
 function bestKey(diffKey) {
@@ -181,6 +186,11 @@ function newHunt() {
   state.companion.running = false
   state.companion.highlightKey = ''
   state.companion.message = t('companion.quiet')
+
+  state.errors = 0
+  state.history = []
+  state.lastCompletes = { rows: new Set(), cols: new Set(), boxes: new Set() }
+  state.flashKey = ''
 
   loadBestScore()
 }
@@ -321,7 +331,91 @@ function pulseError() {
 // victory overlay burst counter (forces re-run of CSS animation)
 const victoryBurst = ref(0)
 
-function handleNumber(n, mode) {
+function removeDraftFromRowCol(r, c, n) {
+  for (let i = 0; i < 9; i++) {
+    const a = state.cells[r][i]
+    const b = state.cells[i][c]
+    if (a && !a.given) {
+      a.cornerNotes.delete(n)
+      a.centerNotes.delete(n)
+    }
+    if (b && !b.given) {
+      b.cornerNotes.delete(n)
+      b.centerNotes.delete(n)
+    }
+  }
+}
+
+function boxIndex(r, c) {
+  return Math.floor(r / 3) * 3 + Math.floor(c / 3)
+}
+
+function playChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const o = ctx.createOscillator()
+    const g = ctx.createGain()
+    o.type = 'triangle'
+    o.frequency.value = 440
+    g.gain.value = 0.0001
+    o.connect(g)
+    g.connect(ctx.destination)
+    o.start()
+    const t0 = ctx.currentTime
+    g.gain.exponentialRampToValueAtTime(0.12, t0 + 0.01)
+    o.frequency.exponentialRampToValueAtTime(660, t0 + 0.12)
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25)
+    o.stop(t0 + 0.26)
+    o.onended = () => ctx.close()
+  } catch {
+    // ignore
+  }
+}
+
+function checkCompletesAndSound() {
+  const g = currentGrid.value
+  // rows
+  for (let r = 0; r < 9; r++) {
+    const complete = g[r].every((v) => v >= 1 && v <= 9)
+    if (complete && !state.lastCompletes.rows.has(r)) {
+      state.lastCompletes.rows.add(r)
+      playChime()
+    }
+  }
+  // cols
+  for (let c = 0; c < 9; c++) {
+    let complete = true
+    for (let r = 0; r < 9; r++) if (!g[r][c]) complete = false
+    if (complete && !state.lastCompletes.cols.has(c)) {
+      state.lastCompletes.cols.add(c)
+      playChime()
+    }
+  }
+  // boxes
+  for (let br = 0; br < 3; br++) {
+    for (let bc = 0; bc < 3; bc++) {
+      let complete = true
+      for (let r = br * 3; r < br * 3 + 3; r++) {
+        for (let c = bc * 3; c < bc * 3 + 3; c++) if (!g[r][c]) complete = false
+      }
+      const bi = br * 3 + bc
+      if (complete && !state.lastCompletes.boxes.has(bi)) {
+        state.lastCompletes.boxes.add(bi)
+        playChime()
+      }
+    }
+  }
+}
+
+function flashCell(r, c) {
+  const k = `${r},${c}`
+  state.flashKey = ''
+  requestAnimationFrame(() => {
+    state.flashKey = k
+  })
+}
+
+function handleNumber(n, mode, source = 'user') {
   if (state.finished) return
 
   // Drafting can apply to multiple selected cells.
@@ -338,22 +432,43 @@ function handleNumber(n, mode) {
   const cell = cellAtSelected()
   if (!cell || cell.given) return
 
-  cell.value = cell.value === n ? 0 : n
+  const r = state.selected.row
+  const c = state.selected.col
+  const prev = cell.value
+  const next = prev === n ? 0 : n
+
+  cell.value = next
   clearNotes(cell)
 
+  if (next) {
+    removeDraftFromRowCol(r, c, next)
+  }
+
+  if (source === 'user') {
+    state.history.push({ r, c, prev, next, at: Date.now() })
+    if (next && state.solution && next !== state.solution[r][c]) {
+      state.errors += 1
+      flashCell(r, c)
+    }
+  }
+
   nextTick(() => {
-    if (conflicts.value.has(`${state.selected.row},${state.selected.col}`)) {
+    if (conflicts.value.has(`${r},${c}`)) {
       pulseError()
     }
+    checkCompletesAndSound()
     tryFinishCheck()
   })
 }
 
 function clearSelected() {
-  const cell = cellAtSelected()
-  if (!cell || cell.given || state.finished) return
-  if (cell.value) cell.value = 0
-  else clearNotes(cell)
+  if (state.finished) return
+  const list = iterSelectedCells()
+  for (const { cell } of list) {
+    if (!cell || cell.given) continue
+    if (cell.value) cell.value = 0
+    clearNotes(cell)
+  }
 }
 
 function revealSolution() {
@@ -419,6 +534,8 @@ function applyStep(r, c, n) {
   if (!cell || cell.given || state.finished) return false
   cell.value = n
   clearNotes(cell)
+  if (n) removeDraftFromRowCol(r, c, n)
+  checkCompletesAndSound()
   return true
 }
 
@@ -494,11 +611,72 @@ function runCompanionLoop() {
   companionTimer = window.setTimeout(runCompanionLoop, state.companion.speedMs)
 }
 
+function hasUserErrors() {
+  if (!state.solution) return false
+  const g = currentGrid.value
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const v = g[r][c]
+      if (v && v !== state.solution[r][c]) return true
+    }
+  }
+  return false
+}
+
+function undoLastUserMove() {
+  const m = state.history.pop()
+  if (!m) return false
+  const cell = cellAt(m.r, m.c)
+  if (!cell || cell.given) return false
+  cell.value = m.prev
+  // keep drafts, but flash for explanation
+  flashCell(m.r, m.c)
+  selectCell({ row: m.r, col: m.c, mode: 'replace' })
+  return true
+}
+
+function companionCorrectErrorsStep() {
+  if (!hasUserErrors()) return false
+
+  // Undo moves until board has no incorrect values.
+  let safety = 300
+  while (hasUserErrors() && safety-- > 0) {
+    const ok = undoLastUserMove()
+    if (!ok) break
+    state.companion.message = t('companion.reverting')
+    return true
+  }
+
+  return hasUserErrors()
+}
+
 function toggleCompanionKill() {
   if (state.companion.running) {
     stopCompanion()
     return
   }
+
+  // If user has mistakes, companion first rewinds to a consistent state.
+  if (hasUserErrors()) {
+    state.companion.running = true
+    state.companion.message = t('companion.undoing')
+
+    const loop = () => {
+      if (!state.companion.running) return
+      const didUndo = companionCorrectErrorsStep()
+      if (didUndo) {
+        companionTimer = window.setTimeout(loop, Math.max(180, state.companion.speedMs))
+        return
+      }
+      // now proceed normally
+      state.companion.message = t('companion.begin')
+      runCompanionLoop()
+    }
+
+    loop()
+    return
+  }
+
   state.companion.running = true
   state.companion.message = t('companion.begin')
   runCompanionLoop()
@@ -514,10 +692,10 @@ function onKeyDown(e) {
   // Arrow navigation => disable hover until mouse is used again
   if (e.key.startsWith('Arrow')) keyboardNav.value = true
 
-  if (e.key === 'ArrowUp') return void (e.preventDefault(), moveSelection(-1, 0, e.ctrlKey || e.metaKey))
-  if (e.key === 'ArrowDown') return void (e.preventDefault(), moveSelection(1, 0, e.ctrlKey || e.metaKey))
-  if (e.key === 'ArrowLeft') return void (e.preventDefault(), moveSelection(0, -1, e.ctrlKey || e.metaKey))
-  if (e.key === 'ArrowRight') return void (e.preventDefault(), moveSelection(0, 1, e.ctrlKey || e.metaKey))
+  if (e.key === 'ArrowUp') return void (e.preventDefault(), moveSelection(-1, 0, e.shiftKey))
+  if (e.key === 'ArrowDown') return void (e.preventDefault(), moveSelection(1, 0, e.shiftKey))
+  if (e.key === 'ArrowLeft') return void (e.preventDefault(), moveSelection(0, -1, e.shiftKey))
+  if (e.key === 'ArrowRight') return void (e.preventDefault(), moveSelection(0, 1, e.shiftKey))
 
   if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
     e.preventDefault()
@@ -531,10 +709,10 @@ function onKeyDown(e) {
     const isCorner = e.shiftKey
     const isCenter = e.ctrlKey || e.metaKey
 
-    if (isCorner && isCenter) handleNumber(n, 'center')
-    else if (isCorner) handleNumber(n, 'corner')
-    else if (isCenter) handleNumber(n, 'center')
-    else handleNumber(n, 'value')
+    if (isCorner && isCenter) handleNumber(n, 'center', 'user')
+    else if (isCorner) handleNumber(n, 'corner', 'user')
+    else if (isCenter) handleNumber(n, 'center', 'user')
+    else handleNumber(n, 'value', 'user')
   }
 }
 
@@ -625,6 +803,7 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
             :disable-hover="keyboardNav"
             :highlight-key="state.companion.highlightKey"
             :decision="state.companion.decision"
+            :flash-key="state.flashKey"
             :class="{ 'error-shake': errorActive }"
             @select="(pos) => selectCell(pos)"
           />

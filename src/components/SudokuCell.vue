@@ -6,6 +6,7 @@ const props = defineProps({
   disableHover: { type: Boolean, default: false },
   highlighted: { type: Boolean, default: false },
   decisionFlags: { type: Object, default: () => ({ decisionFocus: false, decisionRow: false, decisionCol: false, decisionBox: false }) },
+  flashed: { type: Boolean, default: false },
   related: { type: Boolean, default: false },
   conflicted: { type: Boolean, default: false },
   row: { type: Number, required: true },
@@ -15,7 +16,8 @@ const props = defineProps({
 const emit = defineEmits(['select'])
 
 function onClick(e) {
-  emit('select', { row: props.row, col: props.col, additive: e?.ctrlKey || e?.metaKey })
+  // shift-click toggles multi-selection (mobile-friendly)
+  emit('select', { row: props.row, col: props.col, additive: e?.shiftKey })
 }
 
 function hasCorner() {
@@ -52,6 +54,7 @@ const cornerSlots = [
       'dec-col': decisionFlags.decisionCol,
       'dec-box': decisionFlags.decisionBox,
       'dec-focus': decisionFlags.decisionFocus,
+      flashed,
     }"
     type="button"
     @click="onClick"
@@ -159,6 +162,19 @@ const cornerSlots = [
   box-shadow:
     0 0 0 1px color-mix(in oklab, var(--gold) 55%, transparent) inset,
     0 0 22px color-mix(in oklab, var(--gold) 35%, transparent);
+}
+
+.cell.flashed {
+  animation: mistake-flash 420ms ease;
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--blood) 70%, transparent) inset,
+    0 0 18px color-mix(in oklab, var(--blood) 35%, transparent);
+}
+
+@keyframes mistake-flash {
+  0% { filter: brightness(1); }
+  35% { filter: brightness(1.25); }
+  100% { filter: brightness(1); }
 }
 
 @keyframes companion-mark {

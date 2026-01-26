@@ -9,6 +9,7 @@ const props = defineProps({
   disableHover: { type: Boolean, default: false },
   highlightKey: { type: String, default: '' }, // "r,c" for companion kill animation
   decision: { type: Object, default: () => ({ r: -1, c: -1, n: 0, kind: '' }) },
+  flashKey: { type: String, default: '' },
 })
 
 const emit = defineEmits(['select'])
@@ -37,13 +38,8 @@ function isRelated(r, c) {
 
 function boxClass(r, c) {
   return {
-    // draw the 3x3 separators by thickening the top/left edges of each box
     'thick-left': c % 3 === 0,
     'thick-top': r % 3 === 0,
-
-    // outer border
-    'thick-right': c === 8,
-    'thick-bottom': r === 8,
   }
 }
 
@@ -77,6 +73,7 @@ function decisionFlags(r, c) {
         :multi="multiSelected.has(`${r},${c}`)"
         :disable-hover="disableHover"
         :highlighted="highlightKey === `${r},${c}`"
+        :flashed="flashKey === `${r},${c}`"
         :decision-flags="decisionFlags(r, c)"
         :related="isRelated(r, c)"
         :conflicted="conflicts.has(`${r},${c}`)"
@@ -93,34 +90,19 @@ function decisionFlags(r, c) {
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   gap: 0;
-  padding: 10px;
-  border-radius: 16px;
-  background:
-    radial-gradient(1000px 600px at 20% 10%, color-mix(in oklab, var(--blood) 18%, transparent), transparent 55%),
-    radial-gradient(900px 600px at 90% 30%, color-mix(in oklab, var(--violet) 10%, transparent), transparent 60%),
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--panel) 92%, transparent),
-      color-mix(in oklab, var(--panel) 82%, black)
-    );
-  border: 2px solid color-mix(in oklab, var(--ink) 60%, transparent);
-  box-shadow:
-    0 18px 60px var(--shadow),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
 }
 
-/* Draw thick separators via inset shadows so they do NOT affect layout width (iOS Safari-friendly) */
+/* Thick separators without affecting layout width */
 .board-cell.thick-left { box-shadow: inset 3px 0 0 color-mix(in oklab, var(--ink) 70%, transparent); }
 .board-cell.thick-top { box-shadow: inset 0 3px 0 color-mix(in oklab, var(--ink) 70%, transparent); }
 
-/* combine when both apply */
 .board-cell.thick-left.thick-top {
   box-shadow:
     inset 3px 0 0 color-mix(in oklab, var(--ink) 70%, transparent),
     inset 0 3px 0 color-mix(in oklab, var(--ink) 70%, transparent);
-}
-
-@media (max-width: 520px) {
-  .board { padding: 6px; }
 }
 </style>
