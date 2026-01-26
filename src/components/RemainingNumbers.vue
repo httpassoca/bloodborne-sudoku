@@ -101,13 +101,13 @@ const anyRemaining = computed(() => slots.value.some((s) => s.show))
 .n {
   font-weight: 900;
   letter-spacing: 0.06em;
-  font-size: 18px;
+  font-size: 26px; /* bigger glyphs, same square size */
   line-height: 1;
   color: color-mix(in oklab, var(--bone) 85%, white);
 }
 
 .left {
-  opacity: 0.8;
+  opacity: 0.75;
   font-size: 12px;
   color: color-mix(in oklab, var(--bone) 70%, var(--mist));
 }

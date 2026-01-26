@@ -44,6 +44,9 @@ const state = reactive({
   bestScore: 0,
 })
 
+// When the user starts navigating with arrows, we disable hover effects until the user uses the mouse again.
+const keyboardNav = ref(false)
+
 function bestKey(diffKey) {
   return `bbs_best_${diffKey}`
 }
@@ -54,7 +57,6 @@ function loadBestScore() {
 }
 
 function scoreFor(diffKey, seconds) {
-  // simple + punchy scoring: higher difficulty = higher base; time drains it
   const mult =
     diffKey === 'easy'
       ? 1
@@ -68,8 +70,7 @@ function scoreFor(diffKey, seconds) {
 
   const base = Math.round(12000 * mult)
   const penalty = Math.round(seconds * 20 * mult)
-  const score = Math.max(0, base - penalty)
-  return score
+  return Math.max(0, base - penalty)
 }
 
 function newHunt() {
@@ -131,7 +132,6 @@ function keyOf(r, c) {
 }
 
 function selectCell({ row, col, mode = 'replace', additive = false }) {
-  // additive=true => toggle
   if (additive && mode === 'replace') mode = 'toggle'
 
   const r = clamp(row, 0, 8)
@@ -279,7 +279,6 @@ function moveSelection(dr, dc, extend = false) {
   })
 }
 
-// Robust key parsing across keyboard layouts:
 function keyToNumber(e) {
   const code = e.code || ''
   if (code.startsWith('Digit')) return Number(code.slice(5))
@@ -299,6 +298,9 @@ function onKeyDown(e) {
 
   const tag = (e.target?.tagName || '').toLowerCase()
   if (tag === 'input' || tag === 'textarea') return
+
+  // Arrow navigation => disable hover until mouse is used again
+  if (e.key.startsWith('Arrow')) keyboardNav.value = true
 
   if (e.key === 'ArrowUp') return void (e.preventDefault(), moveSelection(-1, 0, e.ctrlKey || e.metaKey))
   if (e.key === 'ArrowDown') return void (e.preventDefault(), moveSelection(1, 0, e.ctrlKey || e.metaKey))
@@ -327,16 +329,23 @@ function onKeyDown(e) {
 function onPointerDown() {
   // dismiss victory on any click/tap
   dismissVictoryIfVisible()
+  keyboardNav.value = false
+}
+
+function onPointerMove() {
+  keyboardNav.value = false
 }
 
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('pointerdown', onPointerDown)
+  window.addEventListener('pointermove', onPointerMove)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('pointerdown', onPointerDown)
+  window.removeEventListener('pointermove', onPointerMove)
 })
 
 const statusText = computed(() => {
@@ -353,12 +362,7 @@ function toggleTheme() {
 <template>
   <div class="app">
     <!-- Victory overlay (dismisses on ANY key or click) -->
-    <div
-      class="victory"
-      :class="{ show: state.victoryVisible }"
-      :data-burst="victoryBurst"
-      aria-hidden="true"
-    >
+    <div class="victory" :class="{ show: state.victoryVisible }" :data-burst="victoryBurst" aria-hidden="true">
       <div class="victory-inner">
         <div class="victory-title">PREY SLAUGHTERED</div>
         <div class="victory-sub">Score: <b>{{ state.score }}</b> · Best: <b>{{ state.bestScore }}</b></div>
@@ -376,58 +380,30 @@ function toggleTheme() {
       </div>
 
       <div class="hud">
-        <div class="pill">
-          <span class="pill-label">Time</span>
-          <span class="pill-value">{{ timeLabel }}</span>
-        </div>
-        <div class="pill">
-          <span class="pill-label">Score</span>
-          <span class="pill-value">{{ state.score || '—' }}</span>
-        </div>
-        <div class="pill">
-          <span class="pill-label">Best</span>
-          <span class="pill-value">{{ state.bestScore || '—' }}</span>
-        </div>
-        <div class="pill">
-          <span class="pill-label">Status</span>
-          <span class="pill-value">{{ statusText }}</span>
-        </div>
+        <div class="pill"><span class="pill-label">Time</span><span class="pill-value">{{ timeLabel }}</span></div>
+        <div class="pill"><span class="pill-label">Score</span><span class="pill-value">{{ state.score || '—' }}</span></div>
+        <div class="pill"><span class="pill-label">Best</span><span class="pill-value">{{ state.bestScore || '—' }}</span></div>
+        <div class="pill"><span class="pill-label">Status</span><span class="pill-value">{{ statusText }}</span></div>
       </div>
     </header>
 
     <main class="main">
-      <section class="board-wrap" aria-label="Sudoku">
-        <SudokuBoard
-          :cells="state.cells"
-          :selected="state.selected"
-          :multi-selected="state.multiSelected"
-          :conflicts="conflicts"
-          :class="{ 'error-shake': errorActive }"
-          @select="(pos) => selectCell(pos)"
-        />
-      </section>
+      <div class="layout">
+        <section class="board-wrap" aria-label="Sudoku">
+          <SudokuBoard
+            :cells="state.cells"
+            :selected="state.selected"
+            :multi-selected="state.multiSelected"
+            :conflicts="conflicts"
+            :disable-hover="keyboardNav"
+            :class="{ 'error-shake': errorActive }"
+            @select="(pos) => selectCell(pos)"
+          />
 
-      <!-- Controls BELOW the board (subtle until hover) -->
-      <section class="dock" aria-label="Controls">
-        <div class="dock-inner">
-          <div class="dock-col">
-            <CustomSelect v-model="difficultyKey" :options="DIFFICULTIES" label="Difficulty" />
-
-            <div class="btn-row">
-              <button class="btn" type="button" @click="newHunt">New Hunt</button>
-              <button class="btn ghost" type="button" @click="clearSelected">Clear</button>
-              <button class="btn danger" type="button" @click="revealSolution">Reveal</button>
-              <button class="btn ghost" type="button" @click="toggleTheme">
-                {{ theme === 'dark' ? 'Light Mode' : 'Dark Mode' }}
-              </button>
-            </div>
-          </div>
-
-          <div class="dock-col dock-right">
-            <RemainingNumbers :grid="currentGrid" />
-
+          <!-- Instructions below the board (subtle until hover) -->
+          <section class="instructions" aria-label="Instructions">
             <details class="helpbox">
-              <summary>Controls</summary>
+              <summary>Controls (hover/tap to reveal)</summary>
               <ul class="help">
                 <li><kbd>1</kbd>–<kbd>9</kbd> place number</li>
                 <li><kbd>Shift</kbd> + <kbd>1</kbd>–<kbd>9</kbd> corner draft</li>
@@ -437,9 +413,32 @@ function toggleTheme() {
                 <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + arrows extend selection (multi-draft)</li>
               </ul>
             </details>
+          </section>
+        </section>
+
+        <aside class="sidepanel">
+          <div class="sidepanel-section">
+            <div class="sidepanel-title">Hunt Setup</div>
+            <CustomSelect v-model="difficultyKey" :options="DIFFICULTIES" label="Difficulty" />
+
+            <div class="btn-row">
+              <button class="btn" type="button" @click="newHunt">New Hunt</button>
+              <button class="btn ghost" type="button" @click="clearSelected">Clear</button>
+            </div>
+
+            <div class="btn-row">
+              <button class="btn danger" type="button" @click="revealSolution">Reveal</button>
+              <button class="btn ghost" type="button" @click="toggleTheme">
+                {{ theme === 'dark' ? 'Light Mode' : 'Dark Mode' }}
+              </button>
+            </div>
           </div>
-        </div>
-      </section>
+
+          <div class="sidepanel-section">
+            <RemainingNumbers :grid="currentGrid" />
+          </div>
+        </aside>
+      </div>
     </main>
 
     <footer class="footer">
@@ -478,11 +477,7 @@ function toggleTheme() {
   background:
     radial-gradient(circle at 30% 30%, color-mix(in oklab, var(--blood) 65%, transparent), transparent 55%),
     radial-gradient(circle at 70% 70%, color-mix(in oklab, var(--ember) 35%, transparent), transparent 60%),
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--panel) 80%, transparent),
-      color-mix(in oklab, var(--ink) 55%, transparent)
-    );
+    linear-gradient(180deg, color-mix(in oklab, var(--panel) 80%, transparent), color-mix(in oklab, var(--ink) 55%, transparent));
   border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
   box-shadow: 0 10px 30px var(--shadow);
   position: relative;
@@ -540,76 +535,36 @@ h1 {
 .main {
   display: grid;
   place-items: start center;
-  gap: 12px;
+}
+
+.layout {
+  max-width: 1100px;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(320px, 560px) 1fr;
+  gap: 14px;
+  align-items: start;
 }
 
 .board-wrap {
   width: 100%;
   max-width: 560px;
+  display: grid;
+  gap: 10px;
 }
 
-/* Controls dock */
-.dock {
-  width: 100%;
-  max-width: 1100px;
+.instructions {
   border-radius: 18px;
-  padding: 12px;
+  padding: 10px;
   background: color-mix(in oklab, var(--panel) 70%, transparent);
   border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
   opacity: 0.72;
-  transition: opacity 160ms ease, transform 160ms ease, background 160ms ease;
+  transition: opacity 160ms ease, background 160ms ease;
 }
 
-.dock:hover {
+.instructions:hover {
   opacity: 1;
   background: color-mix(in oklab, var(--panel) 84%, transparent);
-  transform: translateY(-1px);
-}
-
-.dock-inner {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  align-items: start;
-}
-
-.dock-col {
-  display: grid;
-  gap: 10px;
-}
-
-.btn-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
-
-.btn {
-  padding: 12px 12px;
-  border-radius: 12px;
-  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
-  background: linear-gradient(180deg, color-mix(in oklab, var(--panel) 86%, transparent), color-mix(in oklab, var(--ink) 35%, transparent));
-  color: var(--bone);
-  cursor: pointer;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
-}
-
-.btn:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in oklab, var(--blood) 55%, var(--ink));
-}
-
-.btn.ghost {
-  background: color-mix(in oklab, var(--panel) 78%, transparent);
-  font-weight: 700;
-}
-
-.btn.danger {
-  border-color: color-mix(in oklab, var(--blood) 55%, var(--ink));
-  background: linear-gradient(180deg, color-mix(in oklab, var(--blood) 22%, var(--panel)), color-mix(in oklab, var(--ink) 35%, transparent));
 }
 
 .helpbox {
@@ -641,6 +596,63 @@ kbd {
   border-radius: 8px;
   border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
   background: color-mix(in oklab, var(--panel) 92%, transparent);
+}
+
+.sidepanel {
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.sidepanel-section {
+  padding: 14px 14px;
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--panel) 84%, transparent);
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+}
+
+.sidepanel-title {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+  opacity: 0.85;
+  margin-bottom: 10px;
+}
+
+.btn-row {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.btn {
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--panel) 86%, transparent), color-mix(in oklab, var(--ink) 35%, transparent));
+  color: var(--bone);
+  cursor: pointer;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--blood) 55%, var(--ink));
+}
+
+.btn.ghost {
+  background: color-mix(in oklab, var(--panel) 78%, transparent);
+  font-weight: 700;
+}
+
+.btn.danger {
+  border-color: color-mix(in oklab, var(--blood) 55%, var(--ink));
+  background: linear-gradient(180deg, color-mix(in oklab, var(--blood) 22%, var(--panel)), color-mix(in oklab, var(--ink) 35%, transparent));
 }
 
 .footer {
@@ -721,35 +733,15 @@ kbd {
   100% { transform: translateX(0); }
 }
 
-/* Mobile friendliness */
+/* Mobile */
 @media (max-width: 980px) {
-  .hud {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .btn-row {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .dock-inner {
-    grid-template-columns: 1fr;
-  }
+  .hud { grid-template-columns: 1fr 1fr; }
+  .layout { grid-template-columns: 1fr; }
+  .sidepanel { position: static; }
 }
 
 @media (max-width: 560px) {
-  .app {
-    padding: 14px 10px 16px;
-    gap: 12px;
-  }
-
-  .dock {
-    position: sticky;
-    bottom: 10px;
-    backdrop-filter: blur(8px);
-  }
-
-  .pill {
-    padding: 9px 10px;
-  }
+  .app { padding: 14px 10px 16px; gap: 12px; }
+  .pill { padding: 9px 10px; }
 }
 </style>

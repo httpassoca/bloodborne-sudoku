@@ -6,6 +6,7 @@ const props = defineProps({
   selected: { type: Object, required: true }, // {row,col}
   multiSelected: { type: Object, required: true }, // Set of "r,c"
   conflicts: { type: Object, required: true }, // Set of "r,c"
+  disableHover: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['select'])
@@ -46,7 +47,7 @@ function boxClass(r, c) {
 </script>
 
 <template>
-  <div class="board" role="grid" aria-label="Sudoku board">
+  <div class="board" :class="{ 'no-hover': disableHover }" role="grid" aria-label="Sudoku board">
     <template v-for="(row, r) in cells" :key="r">
       <SudokuCell
         v-for="(cell, c) in row"
@@ -56,6 +57,7 @@ function boxClass(r, c) {
         :col="c"
         :selected="selected.row === r && selected.col === c"
         :multi="multiSelected.has(`${r},${c}`)"
+        :disable-hover="disableHover"
         :related="isRelated(r, c)"
         :conflicted="conflicts.has(`${r},${c}`)"
         class="board-cell"
