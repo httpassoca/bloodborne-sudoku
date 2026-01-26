@@ -738,15 +738,32 @@ h1 {
   width: 100%;
   display: grid;
   grid-template-columns: minmax(320px, 560px) 1fr;
+  grid-template-areas: 'board side';
   gap: 14px;
   align-items: start;
 }
 
 .board-wrap {
+  grid-area: board;
   width: 100%;
   max-width: 560px;
   display: grid;
   gap: 10px;
+  overflow: hidden; /* prevent glow/border overflow on small screens */
+}
+
+.sidepanel {
+  grid-area: side;
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+/* Ensure the board never exceeds its container */
+.board-wrap :deep(.board) {
+  width: 100%;
+  max-width: 100%;
 }
 
 .companion-explain {
@@ -808,12 +825,7 @@ kbd {
   background: color-mix(in oklab, var(--panel) 92%, transparent);
 }
 
-.sidepanel {
-  position: sticky;
-  top: 16px;
-  display: grid;
-  gap: 12px;
-}
+/* sidepanel definition moved up (grid-area aware) */
 
 .sidepanel-section {
   padding: 14px 14px;
@@ -1040,13 +1052,36 @@ kbd {
 
 /* Mobile */
 @media (max-width: 980px) {
-  .layout { grid-template-columns: 1fr; }
-  .sidepanel { position: static; }
+  /* On mobile/tablet: Hunt setup below header */
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'side'
+      'board';
+  }
+
+  .sidepanel {
+    position: static;
+  }
+
+  .board-wrap {
+    max-width: 100%;
+  }
+
   .remaining-row { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
   .app { padding: 14px 10px 16px; gap: 12px; }
+
+  .hud {
+    grid-template-columns: 1fr;
+  }
+
   .pill { padding: 9px 10px; }
+
+  .sidepanel-section {
+    padding: 12px 12px;
+  }
 }
 </style>
