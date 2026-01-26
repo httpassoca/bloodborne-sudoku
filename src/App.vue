@@ -4,7 +4,7 @@ import SudokuBoard from './components/SudokuBoard.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
 import { DIFFICULTIES, computeConflicts, generatePuzzle, isSolved } from './lib/sudoku'
-import { nextLogicalMove } from './lib/logicSolver'
+import { nextLogicalMove, candidatesFor } from './lib/logicSolver'
 
 function makeCell(value, given) {
   return {
@@ -47,13 +47,42 @@ const state = reactive({
   companion: {
     running: false,
     speedMs: 450,
+    speedPreset: 'normal',
     highlightKey: '',
     message: 'The companion is quiet.',
+    explain: {
+      r: -1,
+      c: -1,
+      n: 0,
+      kind: '',
+      candidates: [],
+      rowUsed: new Set(),
+      colUsed: new Set(),
+      boxUsed: new Set(),
+    },
   },
 })
 
 // When the user starts navigating with arrows, we disable hover effects until the user uses the mouse again.
 const keyboardNav = ref(false)
+
+const speedPresets = [
+  { key: 'slow', label: 'Slow (900ms)', ms: 900 },
+  { key: 'normal', label: 'Normal (450ms)', ms: 450 },
+  { key: 'fast', label: 'Fast (240ms)', ms: 240 },
+  { key: 'blitz', label: 'Blitz (120ms)', ms: 120 },
+]
+
+function applySpeedPreset() {
+  const p = speedPresets.find((x) => x.key === state.companion.speedPreset)
+  if (p) state.companion.speedMs = p.ms
+}
+watch(
+  () => state.companion.speedPreset,
+  () => applySpeedPreset(),
+  { immediate: true }
+)
+
 
 function bestKey(diffKey) {
   return `bbs_best_${diffKey}`
@@ -314,14 +343,44 @@ function dismissVictoryIfVisible() {
 // Companion kill (auto-solver)
 let companionTimer = null
 
-function highlightStep(r, c, message) {
+function setExplainFor(r, c, n, kind) {
+  const grid = currentGrid.value
+  const rowUsed = new Set()
+  const colUsed = new Set()
+  const boxUsed = new Set()
+
+  for (let i = 0; i < 9; i++) {
+    if (grid[r][i]) rowUsed.add(grid[r][i])
+    if (grid[i][c]) colUsed.add(grid[i][c])
+  }
+  const br = Math.floor(r / 3) * 3
+  const bc = Math.floor(c / 3) * 3
+  for (let rr = br; rr < br + 3; rr++) {
+    for (let cc = bc; cc < bc + 3; cc++) {
+      if (grid[rr][cc]) boxUsed.add(grid[rr][cc])
+    }
+  }
+
+  state.companion.explain = {
+    r,
+    c,
+    n,
+    kind,
+    candidates: candidatesFor(grid, r, c),
+    rowUsed,
+    colUsed,
+    boxUsed,
+  }
+}
+
+function highlightStep(r, c, message, n = 0, kind = '') {
   const k = `${r},${c}`
   state.companion.highlightKey = ''
-  // restart animation
   requestAnimationFrame(() => {
     state.companion.highlightKey = k
   })
   state.companion.message = message
+  if (n) setExplainFor(r, c, n, kind)
   selectCell({ row: r, col: c, mode: 'replace' })
 }
 
@@ -351,7 +410,7 @@ function companionStep() {
   if (move) {
     const ok = applyStep(move.r, move.c, move.n)
     if (ok) {
-      highlightStep(move.r, move.c, `Companion: ${move.detail}`)
+      highlightStep(move.r, move.c, `Companion: ${move.detail}`, move.n, move.kind)
       tryFinishCheck()
       return true
     }
@@ -367,7 +426,9 @@ function companionStep() {
     highlightStep(
       empty.r,
       empty.c,
-      `Companion: No simple single found. Revealing the next correct value: ${n}.`
+      `Companion: No simple single found. Revealing the next correct value: ${n}.`,
+      n,
+      'reveal'
     )
     tryFinishCheck()
     return true
@@ -472,6 +533,19 @@ function toggleTheme() {
 }
 
 const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
+
+function candClass(n) {
+  const ex = state.companion.explain
+  const allowed = ex.candidates?.includes(n)
+  if (allowed) return { allowed: true }
+
+  // blocked classification priority for visual clarity
+  if (ex.rowUsed?.has(n)) return { 'block-row': true }
+  if (ex.colUsed?.has(n)) return { 'block-col': true }
+  if (ex.boxUsed?.has(n)) return { 'block-box': true }
+  return { other: true }
+}
+
 </script>
 
 <template>
@@ -562,6 +636,11 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
                 <span class="speed-label">Companion speed</span>
                 <span class="speed-value">{{ state.companion.speedMs }}ms</span>
               </div>
+
+              <select v-model="state.companion.speedPreset" class="speed-select">
+                <option v-for="p in speedPresets" :key="p.key" :value="p.key">{{ p.label }}</option>
+              </select>
+
               <input
                 class="slider"
                 type="range"
@@ -575,6 +654,26 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
             <div class="companion-log" :class="{ active: state.companion.running }">
               <div class="companion-title">Companion Log</div>
               <div class="companion-text">{{ state.companion.message }}</div>
+
+              <div v-if="state.companion.explain.r !== -1" class="explain">
+                <div class="explain-head">
+                  <span class="explain-title">Decision</span>
+                  <span class="explain-meta">r{{ state.companion.explain.r + 1 }}c{{ state.companion.explain.c + 1 }} = {{ state.companion.explain.n }}</span>
+                </div>
+
+                <div class="cand-grid" aria-label="Candidate alignment">
+                  <div v-for="n in 9" :key="n" class="cand" :class="candClass(n)">
+                    {{ n }}
+                  </div>
+                </div>
+
+                <div class="legend">
+                  <span class="tag allowed">Allowed</span>
+                  <span class="tag row">Blocked by row</span>
+                  <span class="tag col">Blocked by column</span>
+                  <span class="tag box">Blocked by box</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -855,9 +954,107 @@ kbd {
   font-weight: 800;
 }
 
+.speed-select {
+  width: 100%;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 90%, transparent);
+  color: var(--bone);
+  outline: none;
+}
+
 .slider {
   width: 100%;
 }
+
+.explain {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in oklab, var(--ink) 50%, transparent);
+  display: grid;
+  gap: 10px;
+}
+
+.explain-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.explain-title {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.explain-meta {
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  opacity: 0.9;
+}
+
+.cand-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.cand {
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 86%, transparent);
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1 / 1;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.cand.allowed {
+  border-color: color-mix(in oklab, var(--gold) 55%, var(--ink));
+  box-shadow: 0 0 18px color-mix(in oklab, var(--gold) 25%, transparent);
+}
+
+.cand.block-row {
+  color: color-mix(in oklab, var(--bone) 65%, var(--blood));
+  background: color-mix(in oklab, var(--panel) 78%, var(--blood) 8%);
+}
+
+.cand.block-col {
+  color: color-mix(in oklab, var(--bone) 65%, var(--inkblue));
+  background: color-mix(in oklab, var(--panel) 78%, var(--inkblue) 8%);
+}
+
+.cand.block-box {
+  color: color-mix(in oklab, var(--bone) 65%, var(--ember));
+  background: color-mix(in oklab, var(--panel) 78%, var(--ember) 8%);
+}
+
+.cand.other {
+  opacity: 0.55;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 90%, transparent);
+  opacity: 0.9;
+}
+
+.tag.allowed { border-color: color-mix(in oklab, var(--gold) 55%, var(--ink)); }
+.tag.row { border-color: color-mix(in oklab, var(--blood) 50%, var(--ink)); }
+.tag.col { border-color: color-mix(in oklab, var(--inkblue) 50%, var(--ink)); }
+.tag.box { border-color: color-mix(in oklab, var(--ember) 50%, var(--ink)); }
 
 .companion-log {
   margin-top: 12px;

@@ -2,7 +2,7 @@
 
 /*
   Bloodborne-inspired palette (not official assets).
-  We expose more accents so UI can feel richer.
+  Rich accents, still muted/aged.
 */
 :root {
   --bg: #070607;
@@ -16,6 +16,12 @@
   --mist: #8a93a6;
   --sage: #6e8c7e;
   --violet: #504060;
+
+  /* extra accents (still on-theme) */
+  --steel: #5c6a74;
+  --inkblue: #2f3b4f;
+  --teal: #2f6b66;
+  --wax: #d1c1a6;
 
   --shadow: rgba(0, 0, 0, 0.55);
 }
@@ -32,6 +38,11 @@
   --mist: #5c667c;
   --sage: #3c6b58;
   --violet: #3e3450;
+
+  --steel: #55606a;
+  --inkblue: #2b3650;
+  --teal: #2c6a60;
+  --wax: #6b5a48;
 
   --shadow: rgba(0, 0, 0, 0.12);
 }
