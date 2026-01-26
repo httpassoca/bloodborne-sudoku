@@ -5,6 +5,7 @@ const props = defineProps({
   multi: { type: Boolean, default: false },
   disableHover: { type: Boolean, default: false },
   highlighted: { type: Boolean, default: false },
+  decisionFlags: { type: Object, default: () => ({ decisionFocus: false, decisionRow: false, decisionCol: false, decisionBox: false }) },
   related: { type: Boolean, default: false },
   conflicted: { type: Boolean, default: false },
   row: { type: Number, required: true },
@@ -39,7 +40,19 @@ const cornerSlots = [
 <template>
   <button
     class="cell"
-    :class="{ selected, multi: multi && !selected, related, given: cell.given, conflicted, highlighted, 'no-hover': disableHover }"
+    :class="{
+      selected,
+      multi: multi && !selected,
+      related,
+      given: cell.given,
+      conflicted,
+      highlighted,
+      'no-hover': disableHover,
+      'dec-row': decisionFlags.decisionRow,
+      'dec-col': decisionFlags.decisionCol,
+      'dec-box': decisionFlags.decisionBox,
+      'dec-focus': decisionFlags.decisionFocus,
+    }"
     type="button"
     @click="onClick"
   >
@@ -102,6 +115,27 @@ const cornerSlots = [
 
 .cell.related:not(.selected) {
   background: color-mix(in oklab, var(--panel) 70%, var(--blood) 6%);
+}
+
+/* Companion decision highlighting (row/col/box overlay tints) */
+.cell.dec-row:not(.selected) {
+  background: color-mix(in oklab, var(--panel) 72%, var(--blood) 10%);
+}
+
+.cell.dec-col:not(.selected) {
+  background: color-mix(in oklab, var(--panel) 72%, var(--inkblue) 11%);
+}
+
+.cell.dec-box:not(.selected) {
+  background: color-mix(in oklab, var(--panel) 72%, var(--ember) 10%);
+}
+
+/* focus cell: stronger, and stacks nicely */
+.cell.dec-focus:not(.selected) {
+  background: color-mix(in oklab, var(--panel) 62%, var(--gold) 16%);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--gold) 55%, transparent) inset,
+    0 0 20px color-mix(in oklab, var(--gold) 28%, transparent);
 }
 
 .cell.multi {

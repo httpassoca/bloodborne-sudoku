@@ -8,6 +8,7 @@ const props = defineProps({
   conflicts: { type: Object, required: true }, // Set of "r,c"
   disableHover: { type: Boolean, default: false },
   highlightKey: { type: String, default: '' }, // "r,c" for companion kill animation
+  decision: { type: Object, default: () => ({ r: -1, c: -1, n: 0, kind: '' }) },
 })
 
 const emit = defineEmits(['select'])
@@ -45,6 +46,22 @@ function boxClass(r, c) {
     'thick-bottom': r === 8,
   }
 }
+
+function decisionFlags(r, c) {
+  const d = props.decision
+  if (!d || d.r === -1 || d.c === -1) {
+    return { decisionFocus: false, decisionRow: false, decisionCol: false, decisionBox: false }
+  }
+  const sameRow = r === d.r
+  const sameCol = c === d.c
+  const sameBox = Math.floor(r / 3) === Math.floor(d.r / 3) && Math.floor(c / 3) === Math.floor(d.c / 3)
+  return {
+    decisionFocus: r === d.r && c === d.c,
+    decisionRow: sameRow,
+    decisionCol: sameCol,
+    decisionBox: sameBox,
+  }
+}
 </script>
 
 <template>
@@ -60,6 +77,7 @@ function boxClass(r, c) {
         :multi="multiSelected.has(`${r},${c}`)"
         :disable-hover="disableHover"
         :highlighted="highlightKey === `${r},${c}`"
+        :decision-flags="decisionFlags(r, c)"
         :related="isRelated(r, c)"
         :conflicted="conflicts.has(`${r},${c}`)"
         class="board-cell"

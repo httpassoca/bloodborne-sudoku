@@ -4,7 +4,7 @@ import SudokuBoard from './components/SudokuBoard.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
 import { DIFFICULTIES, computeConflicts, generatePuzzle, isSolved } from './lib/sudoku'
-import { nextLogicalMove, candidatesFor } from './lib/logicSolver'
+import { nextLogicalMove } from './lib/logicSolver'
 
 function makeCell(value, given) {
   return {
@@ -50,16 +50,7 @@ const state = reactive({
     speedPreset: 'normal',
     highlightKey: '',
     message: 'The companion is quiet.',
-    explain: {
-      r: -1,
-      c: -1,
-      n: 0,
-      kind: '',
-      candidates: [],
-      rowUsed: new Set(),
-      colUsed: new Set(),
-      boxUsed: new Set(),
-    },
+    decision: { r: -1, c: -1, n: 0, kind: '' },
   },
 })
 
@@ -67,12 +58,14 @@ const state = reactive({
 const keyboardNav = ref(false)
 
 const speedPresets = [
-  { key: 'ritual', label: 'Ritual (4.0s)', ms: 4000 },
-  { key: 'slow', label: 'Slow (2.0s)', ms: 2000 },
-  { key: 'steady', label: 'Steady (1.2s)', ms: 1200 },
-  { key: 'normal', label: 'Normal (650ms)', ms: 650 },
-  { key: 'fast', label: 'Fast (350ms)', ms: 350 },
-  { key: 'blitz', label: 'Blitz (180ms)', ms: 180 },
+  { key: 'funeral', label: 'Funeral (8.0s)', ms: 8000 },
+  { key: 'ritual', label: 'Ritual (6.0s)', ms: 6000 },
+  { key: 'slow', label: 'Slow (4.0s)', ms: 4000 },
+  { key: 'steady', label: 'Steady (2.0s)', ms: 2000 },
+  { key: 'normal', label: 'Normal (1.2s)', ms: 1200 },
+  { key: 'fast', label: 'Fast (650ms)', ms: 650 },
+  { key: 'blitz', label: 'Blitz (350ms)', ms: 350 },
+  { key: 'frenzy', label: 'Frenzy (180ms)', ms: 180 },
 ]
 
 function applySpeedPreset() {
@@ -345,34 +338,8 @@ function dismissVictoryIfVisible() {
 // Companion kill (auto-solver)
 let companionTimer = null
 
-function setExplainFor(r, c, n, kind) {
-  const grid = currentGrid.value
-  const rowUsed = new Set()
-  const colUsed = new Set()
-  const boxUsed = new Set()
-
-  for (let i = 0; i < 9; i++) {
-    if (grid[r][i]) rowUsed.add(grid[r][i])
-    if (grid[i][c]) colUsed.add(grid[i][c])
-  }
-  const br = Math.floor(r / 3) * 3
-  const bc = Math.floor(c / 3) * 3
-  for (let rr = br; rr < br + 3; rr++) {
-    for (let cc = bc; cc < bc + 3; cc++) {
-      if (grid[rr][cc]) boxUsed.add(grid[rr][cc])
-    }
-  }
-
-  state.companion.explain = {
-    r,
-    c,
-    n,
-    kind,
-    candidates: candidatesFor(grid, r, c),
-    rowUsed,
-    colUsed,
-    boxUsed,
-  }
+function setDecision(r, c, n, kind) {
+  state.companion.decision = { r, c, n, kind }
 }
 
 function highlightStep(r, c, message, n = 0, kind = '') {
@@ -382,7 +349,7 @@ function highlightStep(r, c, message, n = 0, kind = '') {
     state.companion.highlightKey = k
   })
   state.companion.message = message
-  if (n) setExplainFor(r, c, n, kind)
+  if (n) setDecision(r, c, n, kind)
   selectCell({ row: r, col: c, mode: 'replace' })
 }
 
@@ -536,17 +503,7 @@ function toggleTheme() {
 
 const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
 
-function candClass(n) {
-  const ex = state.companion.explain
-  const allowed = ex.candidates?.includes(n)
-  if (allowed) return { allowed: true }
-
-  // blocked classification priority for visual clarity
-  if (ex.rowUsed?.has(n)) return { 'block-row': true }
-  if (ex.colUsed?.has(n)) return { 'block-col': true }
-  if (ex.boxUsed?.has(n)) return { 'block-box': true }
-  return { other: true }
-}
+// (candidate grid removed)
 
 </script>
 
@@ -586,9 +543,16 @@ function candClass(n) {
             :conflicts="conflicts"
             :disable-hover="keyboardNav"
             :highlight-key="state.companion.highlightKey"
+            :decision="state.companion.decision"
             :class="{ 'error-shake': errorActive }"
             @select="(pos) => selectCell(pos)"
           />
+
+          <!-- Companion explanation (text) -->
+          <section class="companion-explain" aria-label="Companion explanation">
+            <div class="companion-explain-title">Companion</div>
+            <div class="companion-explain-text">{{ state.companion.message }}</div>
+          </section>
 
           <!-- Instructions (not a dropdown): subtle until hover -->
           <section class="instructions" aria-label="Instructions">
@@ -649,26 +613,7 @@ function candClass(n) {
             <div class="companion-log" :class="{ active: state.companion.running }">
               <div class="companion-title">Companion Log</div>
               <div class="companion-text">{{ state.companion.message }}</div>
-
-              <div v-if="state.companion.explain.r !== -1" class="explain">
-                <div class="explain-head">
-                  <span class="explain-title">Decision</span>
-                  <span class="explain-meta">r{{ state.companion.explain.r + 1 }}c{{ state.companion.explain.c + 1 }} = {{ state.companion.explain.n }}</span>
-                </div>
-
-                <div class="cand-grid" aria-label="Candidate alignment">
-                  <div v-for="n in 9" :key="n" class="cand" :class="candClass(n)">
-                    {{ n }}
-                  </div>
-                </div>
-
-                <div class="legend">
-                  <span class="tag allowed">Allowed</span>
-                  <span class="tag row">Blocked by row</span>
-                  <span class="tag col">Blocked by column</span>
-                  <span class="tag box">Blocked by box</span>
-                </div>
-              </div>
+              <div class="companion-hint">Decision is highlighted on the board.</div>
             </div>
           </div>
 
@@ -802,6 +747,27 @@ h1 {
   max-width: 560px;
   display: grid;
   gap: 10px;
+}
+
+.companion-explain {
+  border-radius: 18px;
+  padding: 12px 12px;
+  background: color-mix(in oklab, var(--panel) 70%, transparent);
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  opacity: 0.8;
+}
+
+.companion-explain-title {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+.companion-explain-text {
+  opacity: 0.92;
+  line-height: 1.35;
 }
 
 .instructions {
@@ -959,95 +925,7 @@ kbd {
   outline: none;
 }
 
-/* slider removed */
-
-.explain {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid color-mix(in oklab, var(--ink) 50%, transparent);
-  display: grid;
-  gap: 10px;
-}
-
-.explain-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.explain-title {
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 12px;
-  opacity: 0.85;
-}
-
-.explain-meta {
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  opacity: 0.9;
-}
-
-.cand-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-}
-
-.cand {
-  border-radius: 10px;
-  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
-  background: color-mix(in oklab, var(--panel) 86%, transparent);
-  display: grid;
-  place-items: center;
-  aspect-ratio: 1 / 1;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-}
-
-.cand.allowed {
-  border-color: color-mix(in oklab, var(--gold) 55%, var(--ink));
-  box-shadow: 0 0 18px color-mix(in oklab, var(--gold) 25%, transparent);
-}
-
-.cand.block-row {
-  color: color-mix(in oklab, var(--bone) 65%, var(--blood));
-  background: color-mix(in oklab, var(--panel) 78%, var(--blood) 8%);
-}
-
-.cand.block-col {
-  color: color-mix(in oklab, var(--bone) 65%, var(--inkblue));
-  background: color-mix(in oklab, var(--panel) 78%, var(--inkblue) 8%);
-}
-
-.cand.block-box {
-  color: color-mix(in oklab, var(--bone) 65%, var(--ember));
-  background: color-mix(in oklab, var(--panel) 78%, var(--ember) 8%);
-}
-
-.cand.other {
-  opacity: 0.55;
-}
-
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.tag {
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
-  background: color-mix(in oklab, var(--panel) 90%, transparent);
-  opacity: 0.9;
-}
-
-.tag.allowed { border-color: color-mix(in oklab, var(--gold) 55%, var(--ink)); }
-.tag.row { border-color: color-mix(in oklab, var(--blood) 50%, var(--ink)); }
-.tag.col { border-color: color-mix(in oklab, var(--inkblue) 50%, var(--ink)); }
-.tag.box { border-color: color-mix(in oklab, var(--ember) 50%, var(--ink)); }
+/* speed preset only (no slider), candidate grid removed */
 
 .companion-log {
   margin-top: 12px;
