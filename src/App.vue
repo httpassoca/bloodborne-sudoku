@@ -731,11 +731,14 @@ h1 {
 .main {
   display: grid;
   place-items: start center;
+  width: 100%;
+  overflow-x: clip;
 }
 
 .layout {
   max-width: 1100px;
   width: 100%;
+  min-width: 0;
   display: grid;
   grid-template-columns: minmax(320px, 560px) 1fr;
   grid-template-areas: 'board side';
@@ -747,6 +750,7 @@ h1 {
   grid-area: board;
   width: 100%;
   max-width: 560px;
+  min-width: 0;
   display: grid;
   gap: 10px;
   overflow: hidden; /* prevent glow/border overflow on small screens */
@@ -754,6 +758,7 @@ h1 {
 
 .sidepanel {
   grid-area: side;
+  min-width: 0;
   position: sticky;
   top: 16px;
   display: grid;
