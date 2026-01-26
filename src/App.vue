@@ -37,6 +37,23 @@ function t(key, params) {
 
 const langOptions = LANGS
 
+// Touch/mobile helpers
+const isCoarsePointer = ref(false)
+const mobileEntryMode = ref('value') // 'value' | 'corner' | 'center'
+
+function updatePointerCoarseness() {
+  isCoarsePointer.value = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches
+}
+
+onMounted(() => {
+  updatePointerCoarseness()
+  window.addEventListener('resize', updatePointerCoarseness)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updatePointerCoarseness)
+})
+
 
 // theme
 const theme = ref(localStorage.getItem('bbs_theme') || 'dark')
@@ -316,6 +333,12 @@ function clearSelected() {
   else clearNotes(cell)
 }
 
+function mobilePlace(n) {
+  if (mobileEntryMode.value === 'corner') handleNumber(n, 'corner')
+  else if (mobileEntryMode.value === 'center') handleNumber(n, 'center')
+  else handleNumber(n, 'value')
+}
+
 function revealSolution() {
   if (!state.solution) return
   for (let r = 0; r < 9; r++) {
@@ -583,6 +606,19 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
             @select="(pos) => selectCell(pos)"
           />
 
+          <!-- Mobile keypad (iOS/Android) -->
+          <section v-if="isCoarsePointer" class="keypad" aria-label="Keypad">
+            <div class="keypad-mode">
+              <button class="mode" :class="{ on: mobileEntryMode === 'value' }" type="button" @click="mobileEntryMode = 'value'">123</button>
+              <button class="mode" :class="{ on: mobileEntryMode === 'corner' }" type="button" @click="mobileEntryMode = 'corner'">↖</button>
+              <button class="mode" :class="{ on: mobileEntryMode === 'center' }" type="button" @click="mobileEntryMode = 'center'">◎</button>
+              <button class="mode danger" type="button" @click="clearSelected">⌫</button>
+            </div>
+            <div class="keypad-grid">
+              <button v-for="n in 9" :key="n" class="key" type="button" @click="mobilePlace(n)">{{ n }}</button>
+            </div>
+          </section>
+
           <!-- Companion explanation (text) -->
           <section class="companion-explain" aria-label="Companion explanation">
             <div class="companion-explain-title">{{ t('companionTitle') }}</div>
@@ -815,6 +851,55 @@ h1 {
 .board-wrap :deep(.board) {
   width: 100%;
   max-width: 100%;
+}
+
+.keypad {
+  border-radius: 18px;
+  padding: 10px;
+  background: color-mix(in oklab, var(--panel) 78%, transparent);
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+}
+
+.keypad-mode {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.mode {
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 82%, transparent);
+  color: var(--bone);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.mode.on {
+  border-color: color-mix(in oklab, var(--gold) 55%, var(--ink));
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--gold) 35%, transparent) inset;
+}
+
+.mode.danger {
+  border-color: color-mix(in oklab, var(--blood) 55%, var(--ink));
+}
+
+.keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 6px;
+}
+
+.key {
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 86%, transparent);
+  color: var(--bone);
+  font-weight: 900;
+  font-size: 16px;
 }
 
 .companion-explain {
@@ -1129,6 +1214,10 @@ kbd {
     max-width: 100%;
   }
 
+  .keypad-grid {
+    grid-template-columns: repeat(9, 1fr);
+  }
+
   .remaining-row { grid-template-columns: 1fr; }
 }
 
@@ -1150,6 +1239,16 @@ kbd {
 
   .sidepanel-section {
     padding: 12px 12px;
+  }
+
+  .keypad-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .key {
+    height: 48px;
+    font-size: 18px;
   }
 }
 </style>
