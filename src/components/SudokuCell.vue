@@ -4,6 +4,7 @@ const props = defineProps({
   selected: { type: Boolean, default: false },
   multi: { type: Boolean, default: false },
   disableHover: { type: Boolean, default: false },
+  highlighted: { type: Boolean, default: false },
   related: { type: Boolean, default: false },
   conflicted: { type: Boolean, default: false },
   row: { type: Number, required: true },
@@ -38,7 +39,7 @@ const cornerSlots = [
 <template>
   <button
     class="cell"
-    :class="{ selected, multi: multi && !selected, related, given: cell.given, conflicted, 'no-hover': disableHover }"
+    :class="{ selected, multi: multi && !selected, related, given: cell.given, conflicted, highlighted, 'no-hover': disableHover }"
     type="button"
     @click="onClick"
   >
@@ -118,6 +119,20 @@ const cornerSlots = [
     0 0 0 1px color-mix(in oklab, var(--blood) 70%, transparent) inset,
     0 0 18px color-mix(in oklab, var(--blood) 25%, transparent);
   animation: conflict-pulse 260ms ease;
+}
+
+.cell.highlighted {
+  position: relative;
+  animation: companion-mark 520ms ease;
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--gold) 55%, transparent) inset,
+    0 0 22px color-mix(in oklab, var(--gold) 35%, transparent);
+}
+
+@keyframes companion-mark {
+  0% { transform: scale(0.98); filter: brightness(1); }
+  40% { transform: scale(1.02); filter: brightness(1.12); }
+  100% { transform: scale(1); filter: brightness(1); }
 }
 
 @keyframes conflict-pulse {

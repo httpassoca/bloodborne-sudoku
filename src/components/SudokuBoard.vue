@@ -7,6 +7,7 @@ const props = defineProps({
   multiSelected: { type: Object, required: true }, // Set of "r,c"
   conflicts: { type: Object, required: true }, // Set of "r,c"
   disableHover: { type: Boolean, default: false },
+  highlightKey: { type: String, default: '' }, // "r,c" for companion kill animation
 })
 
 const emit = defineEmits(['select'])
@@ -58,6 +59,7 @@ function boxClass(r, c) {
         :selected="selected.row === r && selected.col === c"
         :multi="multiSelected.has(`${r},${c}`)"
         :disable-hover="disableHover"
+        :highlighted="highlightKey === `${r},${c}`"
         :related="isRelated(r, c)"
         :conflicted="conflicts.has(`${r},${c}`)"
         class="board-cell"

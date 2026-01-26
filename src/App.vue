@@ -4,6 +4,7 @@ import SudokuBoard from './components/SudokuBoard.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
 import { DIFFICULTIES, computeConflicts, generatePuzzle, isSolved } from './lib/sudoku'
+import { nextLogicalMove } from './lib/logicSolver'
 
 function makeCell(value, given) {
   return {
@@ -42,6 +43,13 @@ const state = reactive({
   victoryVisible: false,
   score: 0,
   bestScore: 0,
+
+  companion: {
+    running: false,
+    speedMs: 450,
+    highlightKey: '',
+    message: 'The companion is quiet.',
+  },
 })
 
 // When the user starts navigating with arrows, we disable hover effects until the user uses the mouse again.
@@ -87,6 +95,10 @@ function newHunt() {
 
   state.victoryVisible = false
   state.score = 0
+
+  state.companion.running = false
+  state.companion.highlightKey = ''
+  state.companion.message = 'The companion is quiet.'
 
   loadBestScore()
 }
@@ -155,6 +167,10 @@ function selectCell({ row, col, mode = 'replace', additive = false }) {
   state.multiSelected = new Set([k])
 }
 
+function cellAt(r, c) {
+  return state.cells[r]?.[c]
+}
+
 function cellAtSelected() {
   return state.cells[state.selected.row]?.[state.selected.col]
 }
@@ -195,6 +211,8 @@ function tryFinishCheck() {
 
     state.victoryVisible = true
     victoryBurst.value++
+
+    state.companion.running = false
   }
 }
 
@@ -269,6 +287,7 @@ function revealSolution() {
   state.score = scoreFor(difficultyKey.value, elapsedSeconds.value)
   state.victoryVisible = true
   victoryBurst.value++
+  state.companion.running = false
 }
 
 function moveSelection(dr, dc, extend = false) {
@@ -290,6 +309,100 @@ function keyToNumber(e) {
 
 function dismissVictoryIfVisible() {
   if (state.victoryVisible) state.victoryVisible = false
+}
+
+// Companion kill (auto-solver)
+let companionTimer = null
+
+function highlightStep(r, c, message) {
+  const k = `${r},${c}`
+  state.companion.highlightKey = ''
+  // restart animation
+  requestAnimationFrame(() => {
+    state.companion.highlightKey = k
+  })
+  state.companion.message = message
+  selectCell({ row: r, col: c, mode: 'replace' })
+}
+
+function applyStep(r, c, n) {
+  const cell = cellAt(r, c)
+  if (!cell || cell.given || state.finished) return false
+  cell.value = n
+  clearNotes(cell)
+  return true
+}
+
+function findFirstEmpty() {
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      if (currentGrid.value[r][c] === 0) return { r, c }
+    }
+  }
+  return null
+}
+
+function companionStep() {
+  if (state.finished) return false
+
+  const grid = currentGrid.value
+  const move = nextLogicalMove(grid)
+
+  if (move) {
+    const ok = applyStep(move.r, move.c, move.n)
+    if (ok) {
+      highlightStep(move.r, move.c, `Companion: ${move.detail}`)
+      tryFinishCheck()
+      return true
+    }
+    return false
+  }
+
+  // Fallback: reveal correct value (uses the precomputed solution)
+  const empty = findFirstEmpty()
+  if (!empty || !state.solution) return false
+  const n = state.solution[empty.r][empty.c]
+  const ok = applyStep(empty.r, empty.c, n)
+  if (ok) {
+    highlightStep(
+      empty.r,
+      empty.c,
+      `Companion: No simple single found. Revealing the next correct value: ${n}.`
+    )
+    tryFinishCheck()
+    return true
+  }
+  return false
+}
+
+function stopCompanion() {
+  state.companion.running = false
+  if (companionTimer) {
+    window.clearTimeout(companionTimer)
+    companionTimer = null
+  }
+}
+
+function runCompanionLoop() {
+  if (!state.companion.running) return
+  const did = companionStep()
+  if (!did) {
+    state.companion.message = 'Companion: Nothing to do.'
+    stopCompanion()
+    return
+  }
+
+  companionTimer = window.setTimeout(runCompanionLoop, state.companion.speedMs)
+}
+
+function toggleCompanionKill() {
+  if (state.companion.running) {
+    stopCompanion()
+    return
+  }
+  state.companion.running = true
+  state.companion.message = 'Companion: Beginning the kill…'
+  runCompanionLoop()
 }
 
 function onKeyDown(e) {
@@ -327,7 +440,6 @@ function onKeyDown(e) {
 }
 
 function onPointerDown() {
-  // dismiss victory on any click/tap
   dismissVictoryIfVisible()
   keyboardNav.value = false
 }
@@ -346,6 +458,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('pointerdown', onPointerDown)
   window.removeEventListener('pointermove', onPointerMove)
+  stopCompanion()
 })
 
 const statusText = computed(() => {
@@ -357,6 +470,8 @@ const statusText = computed(() => {
 function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
 }
+
+const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
 </script>
 
 <template>
@@ -380,10 +495,8 @@ function toggleTheme() {
       </div>
 
       <div class="hud">
-        <div class="pill"><span class="pill-label">Time</span><span class="pill-value">{{ timeLabel }}</span></div>
         <div class="pill"><span class="pill-label">Score</span><span class="pill-value">{{ state.score || '—' }}</span></div>
         <div class="pill"><span class="pill-label">Best</span><span class="pill-value">{{ state.bestScore || '—' }}</span></div>
-        <div class="pill"><span class="pill-label">Status</span><span class="pill-value">{{ statusText }}</span></div>
       </div>
     </header>
 
@@ -396,30 +509,41 @@ function toggleTheme() {
             :multi-selected="state.multiSelected"
             :conflicts="conflicts"
             :disable-hover="keyboardNav"
+            :highlight-key="state.companion.highlightKey"
             :class="{ 'error-shake': errorActive }"
             @select="(pos) => selectCell(pos)"
           />
 
-          <!-- Instructions below the board (subtle until hover) -->
+          <!-- Instructions (not a dropdown): subtle until hover -->
           <section class="instructions" aria-label="Instructions">
-            <details class="helpbox">
-              <summary>Controls (hover/tap to reveal)</summary>
-              <ul class="help">
-                <li><kbd>1</kbd>–<kbd>9</kbd> place number</li>
-                <li><kbd>Shift</kbd> + <kbd>1</kbd>–<kbd>9</kbd> corner draft</li>
-                <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>1</kbd>–<kbd>9</kbd> center draft</li>
-                <li><kbd>Backspace</kbd>/<kbd>Del</kbd> clear</li>
-                <li>Arrow keys move selection</li>
-                <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + arrows extend selection (multi-draft)</li>
-              </ul>
-            </details>
+            <div class="instructions-title">Controls</div>
+            <ul class="help">
+              <li><kbd>1</kbd>–<kbd>9</kbd> place number</li>
+              <li><kbd>Shift</kbd> + <kbd>1</kbd>–<kbd>9</kbd> corner draft</li>
+              <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>1</kbd>–<kbd>9</kbd> center draft</li>
+              <li><kbd>Backspace</kbd>/<kbd>Del</kbd> clear</li>
+              <li>Arrow keys move selection</li>
+              <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + arrows extend selection (multi-draft)</li>
+            </ul>
           </section>
         </section>
 
         <aside class="sidepanel">
           <div class="sidepanel-section">
             <div class="sidepanel-title">Hunt Setup</div>
-            <CustomSelect v-model="difficultyKey" :options="DIFFICULTIES" label="Difficulty" />
+
+            <div class="setup-row">
+              <CustomSelect v-model="difficultyKey" :options="DIFFICULTIES" label="Difficulty" />
+              <button
+                class="icon-btn"
+                type="button"
+                :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+                title="Toggle theme"
+                @click="toggleTheme"
+              >
+                {{ themeIcon }}
+              </button>
+            </div>
 
             <div class="btn-row">
               <button class="btn" type="button" @click="newHunt">New Hunt</button>
@@ -428,14 +552,47 @@ function toggleTheme() {
 
             <div class="btn-row">
               <button class="btn danger" type="button" @click="revealSolution">Reveal</button>
-              <button class="btn ghost" type="button" @click="toggleTheme">
-                {{ theme === 'dark' ? 'Light Mode' : 'Dark Mode' }}
+              <button class="btn" type="button" @click="toggleCompanionKill">
+                {{ state.companion.running ? 'Stop Companion' : 'Companion Kill' }}
               </button>
+            </div>
+
+            <div class="speed">
+              <div class="speed-head">
+                <span class="speed-label">Companion speed</span>
+                <span class="speed-value">{{ state.companion.speedMs }}ms</span>
+              </div>
+              <input
+                class="slider"
+                type="range"
+                min="120"
+                max="1200"
+                step="30"
+                v-model.number="state.companion.speedMs"
+              />
+            </div>
+
+            <div class="companion-log" :class="{ active: state.companion.running }">
+              <div class="companion-title">Companion Log</div>
+              <div class="companion-text">{{ state.companion.message }}</div>
             </div>
           </div>
 
           <div class="sidepanel-section">
-            <RemainingNumbers :grid="currentGrid" />
+            <div class="remaining-row">
+              <RemainingNumbers :grid="currentGrid" />
+
+              <div class="mini-hud">
+                <div class="pill">
+                  <span class="pill-label">Time</span>
+                  <span class="pill-value">{{ timeLabel }}</span>
+                </div>
+                <div class="pill">
+                  <span class="pill-label">Status</span>
+                  <span class="pill-value">{{ statusText }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </aside>
       </div>
@@ -507,7 +664,7 @@ h1 {
 
 .hud {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 
@@ -555,10 +712,10 @@ h1 {
 
 .instructions {
   border-radius: 18px;
-  padding: 10px;
+  padding: 12px 12px;
   background: color-mix(in oklab, var(--panel) 70%, transparent);
   border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
-  opacity: 0.72;
+  opacity: 0.62;
   transition: opacity 160ms ease, background 160ms ease;
 }
 
@@ -567,23 +724,16 @@ h1 {
   background: color-mix(in oklab, var(--panel) 84%, transparent);
 }
 
-.helpbox {
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
-  background: color-mix(in oklab, var(--panel) 84%, transparent);
-}
-
-.helpbox summary {
-  cursor: pointer;
+.instructions-title {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-size: 12px;
   opacity: 0.85;
+  margin-bottom: 8px;
 }
 
 .help {
-  margin: 10px 0 0;
+  margin: 0;
   padding-left: 18px;
   display: grid;
   gap: 6px;
@@ -620,6 +770,30 @@ kbd {
   margin-bottom: 10px;
 }
 
+.setup-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 78%, transparent);
+  color: color-mix(in oklab, var(--bone) 90%, white);
+  cursor: pointer;
+  font-size: 18px;
+  display: grid;
+  place-items: center;
+}
+
+.icon-btn:hover {
+  border-color: color-mix(in oklab, var(--gold) 45%, var(--ink));
+}
+
 .btn-row {
   margin-top: 10px;
   display: grid;
@@ -653,6 +827,69 @@ kbd {
 .btn.danger {
   border-color: color-mix(in oklab, var(--blood) 55%, var(--ink));
   background: linear-gradient(180deg, color-mix(in oklab, var(--blood) 22%, var(--panel)), color-mix(in oklab, var(--ink) 35%, transparent));
+}
+
+.speed {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in oklab, var(--ink) 50%, transparent);
+  display: grid;
+  gap: 8px;
+}
+
+.speed-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.speed-label {
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+}
+
+.speed-value {
+  opacity: 0.85;
+  font-weight: 800;
+}
+
+.slider {
+  width: 100%;
+}
+
+.companion-log {
+  margin-top: 12px;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 80%, transparent);
+}
+
+.companion-title {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+.companion-text {
+  opacity: 0.9;
+  line-height: 1.35;
+}
+
+.remaining-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.mini-hud {
+  display: grid;
+  gap: 10px;
 }
 
 .footer {
@@ -735,9 +972,9 @@ kbd {
 
 /* Mobile */
 @media (max-width: 980px) {
-  .hud { grid-template-columns: 1fr 1fr; }
   .layout { grid-template-columns: 1fr; }
   .sidepanel { position: static; }
+  .remaining-row { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
