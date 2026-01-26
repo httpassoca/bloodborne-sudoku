@@ -67,10 +67,12 @@ const state = reactive({
 const keyboardNav = ref(false)
 
 const speedPresets = [
-  { key: 'slow', label: 'Slow (900ms)', ms: 900 },
-  { key: 'normal', label: 'Normal (450ms)', ms: 450 },
-  { key: 'fast', label: 'Fast (240ms)', ms: 240 },
-  { key: 'blitz', label: 'Blitz (120ms)', ms: 120 },
+  { key: 'ritual', label: 'Ritual (4.0s)', ms: 4000 },
+  { key: 'slow', label: 'Slow (2.0s)', ms: 2000 },
+  { key: 'steady', label: 'Steady (1.2s)', ms: 1200 },
+  { key: 'normal', label: 'Normal (650ms)', ms: 650 },
+  { key: 'fast', label: 'Fast (350ms)', ms: 350 },
+  { key: 'blitz', label: 'Blitz (180ms)', ms: 180 },
 ]
 
 function applySpeedPreset() {
@@ -634,21 +636,14 @@ function candClass(n) {
             <div class="speed">
               <div class="speed-head">
                 <span class="speed-label">Companion speed</span>
-                <span class="speed-value">{{ state.companion.speedMs }}ms</span>
+                <span class="speed-value">{{ (state.companion.speedMs / 1000).toFixed(2) }}s</span>
               </div>
 
               <select v-model="state.companion.speedPreset" class="speed-select">
                 <option v-for="p in speedPresets" :key="p.key" :value="p.key">{{ p.label }}</option>
               </select>
 
-              <input
-                class="slider"
-                type="range"
-                min="120"
-                max="1200"
-                step="30"
-                v-model.number="state.companion.speedMs"
-              />
+              <!-- slider removed: presets only -->
             </div>
 
             <div class="companion-log" :class="{ active: state.companion.running }">
@@ -964,9 +959,7 @@ kbd {
   outline: none;
 }
 
-.slider {
-  width: 100%;
-}
+/* slider removed */
 
 .explain {
   margin-top: 10px;

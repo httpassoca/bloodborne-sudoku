@@ -2,26 +2,26 @@
 
 /*
   Bloodborne-inspired palette (not official assets).
-  Rich accents, still muted/aged.
+  Higher contrast accents while staying gothic/aged.
 */
 :root {
   --bg: #070607;
   --panel: #141012;
   --ink: #2a2226;
-  --bone: #e7d9c8;
+  --bone: #f0e4d6; /* brighter for contrast */
 
-  --blood: #8e1021;
-  --ember: #c04a2a;
-  --gold: #b08d2e;
-  --mist: #8a93a6;
-  --sage: #6e8c7e;
-  --violet: #504060;
+  --blood: #b10f2a; /* deeper + brighter */
+  --ember: #e0652c;
+  --gold: #d0a941;
+  --mist: #aeb7c9;
+  --sage: #78a08a;
+  --violet: #6a4b86;
 
-  /* extra accents (still on-theme) */
-  --steel: #5c6a74;
-  --inkblue: #2f3b4f;
-  --teal: #2f6b66;
-  --wax: #d1c1a6;
+  /* extra accents */
+  --steel: #7b8a96;
+  --inkblue: #36507a;
+  --teal: #2f8b83;
+  --wax: #e0d0b6;
 
   --shadow: rgba(0, 0, 0, 0.55);
 }
@@ -30,18 +30,18 @@
   --bg: #f3efe8;
   --panel: #ffffff;
   --ink: #c9bfb3;
-  --bone: #1f1a18;
+  --bone: #1b1715;
 
-  --blood: #8b0f1f;
-  --ember: #b5482a;
-  --gold: #8e6f20;
-  --mist: #5c667c;
-  --sage: #3c6b58;
-  --violet: #3e3450;
+  --blood: #9b0f22;
+  --ember: #c04a2a;
+  --gold: #9a7620;
+  --mist: #4b5670;
+  --sage: #2f6f58;
+  --violet: #3b2f55;
 
-  --steel: #55606a;
-  --inkblue: #2b3650;
-  --teal: #2c6a60;
+  --steel: #4f5a64;
+  --inkblue: #2b4470;
+  --teal: #1f6e66;
   --wax: #6b5a48;
 
   --shadow: rgba(0, 0, 0, 0.12);
@@ -55,17 +55,17 @@ body {
   margin: 0;
   color: var(--bone);
   background:
-    radial-gradient(1200px 800px at 10% 10%, color-mix(in oklab, var(--blood) 18%, transparent), transparent 60%),
-    radial-gradient(900px 700px at 90% 20%, color-mix(in oklab, var(--violet) 10%, transparent), transparent 62%),
-    radial-gradient(900px 700px at 40% 120%, color-mix(in oklab, var(--mist) 10%, transparent), transparent 65%),
+    radial-gradient(1200px 800px at 10% 10%, color-mix(in oklab, var(--blood) 22%, transparent), transparent 60%),
+    radial-gradient(900px 700px at 90% 20%, color-mix(in oklab, var(--violet) 14%, transparent), transparent 62%),
+    radial-gradient(900px 700px at 40% 120%, color-mix(in oklab, var(--mist) 12%, transparent), transparent 65%),
     linear-gradient(180deg, color-mix(in oklab, var(--bg) 96%, black), var(--bg));
   font-family: 'IM Fell English', ui-serif, Georgia, 'Times New Roman', Times, serif;
 }
 
 :root[data-theme='light'] body {
   background:
-    radial-gradient(1200px 800px at 10% 10%, color-mix(in oklab, var(--blood) 10%, transparent), transparent 60%),
-    radial-gradient(900px 700px at 90% 20%, color-mix(in oklab, var(--gold) 10%, transparent), transparent 62%),
+    radial-gradient(1200px 800px at 10% 10%, color-mix(in oklab, var(--blood) 12%, transparent), transparent 60%),
+    radial-gradient(900px 700px at 90% 20%, color-mix(in oklab, var(--gold) 12%, transparent), transparent 62%),
     radial-gradient(900px 700px at 40% 120%, color-mix(in oklab, var(--mist) 10%, transparent), transparent 65%),
     linear-gradient(180deg, #fbf7f0, var(--bg));
 }
