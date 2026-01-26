@@ -646,10 +646,17 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
 <style scoped>
 .app {
   min-height: 100vh;
-  padding: 18px 14px 18px;
+  min-height: 100dvh;
+  padding:
+    calc(18px + env(safe-area-inset-top))
+    calc(14px + env(safe-area-inset-right))
+    calc(18px + env(safe-area-inset-bottom))
+    calc(14px + env(safe-area-inset-left));
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: 14px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .top {
@@ -1077,7 +1084,14 @@ kbd {
 }
 
 @media (max-width: 560px) {
-  .app { padding: 14px 10px 16px; gap: 12px; }
+  .app {
+    padding:
+      calc(14px + env(safe-area-inset-top))
+      calc(10px + env(safe-area-inset-right))
+      calc(16px + env(safe-area-inset-bottom))
+      calc(10px + env(safe-area-inset-left));
+    gap: 12px;
+  }
 
   .hud {
     grid-template-columns: 1fr;
