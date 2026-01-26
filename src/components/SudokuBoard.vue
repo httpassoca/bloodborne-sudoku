@@ -103,21 +103,24 @@ function decisionFlags(r, c) {
       color-mix(in oklab, var(--panel) 92%, transparent),
       color-mix(in oklab, var(--panel) 82%, black)
     );
-  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  border: 2px solid color-mix(in oklab, var(--ink) 60%, transparent);
   box-shadow:
     0 18px 60px var(--shadow),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 }
 
-/* since each cell draws top/left borders, thickening those gives crisp 3x3 separators */
-.board-cell.thick-left { border-left-width: 3px; }
-.board-cell.thick-top { border-top-width: 3px; }
+/* Draw thick separators via inset shadows so they do NOT affect layout width (iOS Safari-friendly) */
+.board-cell.thick-left { box-shadow: inset 3px 0 0 color-mix(in oklab, var(--ink) 70%, transparent); }
+.board-cell.thick-top { box-shadow: inset 0 3px 0 color-mix(in oklab, var(--ink) 70%, transparent); }
 
-/* outer border */
-.board-cell.thick-right { border-right-width: 3px; }
-.board-cell.thick-bottom { border-bottom-width: 3px; }
+/* combine when both apply */
+.board-cell.thick-left.thick-top {
+  box-shadow:
+    inset 3px 0 0 color-mix(in oklab, var(--ink) 70%, transparent),
+    inset 0 3px 0 color-mix(in oklab, var(--ink) 70%, transparent);
+}
 
 @media (max-width: 520px) {
-  .board { padding: 8px; }
+  .board { padding: 6px; }
 }
 </style>

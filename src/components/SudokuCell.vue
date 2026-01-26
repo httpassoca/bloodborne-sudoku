@@ -84,9 +84,7 @@ const cornerSlots = [
   position: relative;
   width: 100%;
   aspect-ratio: 1 / 1;
-  border-style: solid;
-  border-color: color-mix(in oklab, var(--ink) 70%, transparent);
-  border-width: 1px 0 0 1px; /* draw grid using top/left to avoid double-thick lines */
+  border: 1px solid color-mix(in oklab, var(--ink) 70%, transparent);
   background: color-mix(in oklab, var(--panel) 80%, transparent);
   color: var(--bone);
   padding: 0;
