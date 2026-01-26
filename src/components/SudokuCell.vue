@@ -2,6 +2,7 @@
 const props = defineProps({
   cell: { type: Object, required: true },
   selected: { type: Boolean, default: false },
+  multi: { type: Boolean, default: false },
   related: { type: Boolean, default: false },
   conflicted: { type: Boolean, default: false },
   row: { type: Number, required: true },
@@ -10,8 +11,8 @@ const props = defineProps({
 
 const emit = defineEmits(['select'])
 
-function onClick() {
-  emit('select', { row: props.row, col: props.col })
+function onClick(e) {
+  emit('select', { row: props.row, col: props.col, additive: e?.ctrlKey || e?.metaKey })
 }
 
 function hasCorner() {
@@ -36,7 +37,7 @@ const cornerSlots = [
 <template>
   <button
     class="cell"
-    :class="{ selected, related, given: cell.given, conflicted }"
+    :class="{ selected, multi: multi && !selected, related, given: cell.given, conflicted }"
     type="button"
     @click="onClick"
   >
@@ -92,6 +93,11 @@ const cornerSlots = [
 
 .cell.related:not(.selected) {
   background: color-mix(in oklab, var(--panel) 70%, var(--blood) 6%);
+}
+
+.cell.multi {
+  background: color-mix(in oklab, var(--panel) 68%, var(--mist) 10%);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--mist) 30%, transparent) inset;
 }
 
 .cell.given {

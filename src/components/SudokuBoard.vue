@@ -4,6 +4,7 @@ import SudokuCell from './SudokuCell.vue'
 const props = defineProps({
   cells: { type: Array, required: true }, // 9x9 cell objects
   selected: { type: Object, required: true }, // {row,col}
+  multiSelected: { type: Object, required: true }, // Set of "r,c"
   conflicts: { type: Object, required: true }, // Set of "r,c"
 })
 
@@ -54,6 +55,7 @@ function boxClass(r, c) {
         :row="r"
         :col="c"
         :selected="selected.row === r && selected.col === c"
+        :multi="multiSelected.has(`${r},${c}`)"
         :related="isRelated(r, c)"
         :conflicted="conflicts.has(`${r},${c}`)"
         class="board-cell"

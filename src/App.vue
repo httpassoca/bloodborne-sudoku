@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
 import SudokuBoard from './components/SudokuBoard.vue'
+import CustomSelect from './components/CustomSelect.vue'
+import RemainingNumbers from './components/RemainingNumbers.vue'
 import { DIFFICULTIES, computeConflicts, generatePuzzle, isSolved } from './lib/sudoku'
 
 function makeCell(value, given) {
@@ -30,6 +32,7 @@ const state = reactive({
   solution: null,
   cells: gridToCells(Array.from({ length: 9 }, () => Array(9).fill(0))),
   selected: { row: 0, col: 0 },
+  multiSelected: new Set(['0,0']),
   startedAt: Date.now(),
   finished: false,
   finishedAt: null,
@@ -41,6 +44,7 @@ function newHunt() {
   state.solution = solution
   state.cells = gridToCells(puzzle)
   state.selected = { row: 0, col: 0 }
+  state.multiSelected = new Set(['0,0'])
   state.startedAt = Date.now()
   state.finished = false
   state.finishedAt = null
@@ -79,13 +83,50 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n))
 }
 
-function selectCell({ row, col }) {
-  state.selected.row = clamp(row, 0, 8)
-  state.selected.col = clamp(col, 0, 8)
+function keyOf(r, c) {
+  return `${r},${c}`
+}
+
+function selectCell({ row, col, mode = 'replace', additive = false }) {
+  // `additive` kept for backward-compat: additive=true => toggle
+  if (additive && mode === 'replace') mode = 'toggle'
+
+  const r = clamp(row, 0, 8)
+  const c = clamp(col, 0, 8)
+  state.selected.row = r
+  state.selected.col = c
+
+  const k = keyOf(r, c)
+  if (mode === 'toggle') {
+    if (state.multiSelected.has(k)) state.multiSelected.delete(k)
+    else state.multiSelected.add(k)
+    if (state.multiSelected.size === 0) state.multiSelected = new Set([k])
+    return
+  }
+
+  if (mode === 'extend') {
+    state.multiSelected.add(k)
+    return
+  }
+
+  state.multiSelected = new Set([k])
 }
 
 function cellAtSelected() {
   return state.cells[state.selected.row]?.[state.selected.col]
+}
+
+function iterSelectedCells() {
+  const out = []
+  for (const k of state.multiSelected) {
+    const [rS, cS] = k.split(',')
+    const r = Number(rS)
+    const c = Number(cS)
+    if (Number.isFinite(r) && Number.isFinite(c)) out.push({ r, c, cell: state.cells[r][c] })
+  }
+  // stable order: row-major
+  out.sort((a, b) => (a.r - b.r) || (a.c - b.c))
+  return out
 }
 
 function clearNotes(cell) {
@@ -128,24 +169,25 @@ function pulseErrorAtSelected() {
 const victoryBurst = ref(0)
 
 function handleNumber(n, mode) {
+  if (state.finished) return
+
+  // Drafting can apply to multiple selected cells.
+  if (mode === 'corner' || mode === 'center') {
+    const list = iterSelectedCells()
+    for (const { cell } of list) {
+      if (!cell || cell.given) continue
+      toggleNote(mode === 'corner' ? cell.cornerNotes : cell.centerNotes, n)
+    }
+    return
+  }
+
+  // Normal entry applies to the primary cell only.
   const cell = cellAtSelected()
-  if (!cell || cell.given || state.finished) return
+  if (!cell || cell.given) return
 
-  if (mode === 'corner') {
-    toggleNote(cell.cornerNotes, n)
-    return
-  }
-
-  if (mode === 'center') {
-    toggleNote(cell.centerNotes, n)
-    return
-  }
-
-  // normal entry
   cell.value = cell.value === n ? 0 : n
   clearNotes(cell)
 
-  // if this move creates a conflict affecting this cell, animate error
   nextTick(() => {
     if (conflicts.value.has(`${state.selected.row},${state.selected.col}`)) {
       pulseErrorAtSelected()
@@ -180,8 +222,12 @@ function revealSolution() {
   victoryBurst.value++
 }
 
-function moveSelection(dr, dc) {
-  selectCell({ row: state.selected.row + dr, col: state.selected.col + dc })
+function moveSelection(dr, dc, extend = false) {
+  selectCell({
+    row: state.selected.row + dr,
+    col: state.selected.col + dc,
+    mode: extend ? 'extend' : 'replace',
+  })
 }
 
 // Robust key parsing across keyboard layouts:
@@ -201,10 +247,11 @@ function onKeyDown(e) {
   const tag = (e.target?.tagName || '').toLowerCase()
   if (tag === 'select' || tag === 'option' || tag === 'input' || tag === 'textarea') return
 
-  if (e.key === 'ArrowUp') return void (e.preventDefault(), moveSelection(-1, 0))
-  if (e.key === 'ArrowDown') return void (e.preventDefault(), moveSelection(1, 0))
-  if (e.key === 'ArrowLeft') return void (e.preventDefault(), moveSelection(0, -1))
-  if (e.key === 'ArrowRight') return void (e.preventDefault(), moveSelection(0, 1))
+  // Ctrl/⌘ + arrows: extend multi-selection while moving (draft across many cells)
+  if (e.key === 'ArrowUp') return void (e.preventDefault(), moveSelection(-1, 0, e.ctrlKey || e.metaKey))
+  if (e.key === 'ArrowDown') return void (e.preventDefault(), moveSelection(1, 0, e.ctrlKey || e.metaKey))
+  if (e.key === 'ArrowLeft') return void (e.preventDefault(), moveSelection(0, -1, e.ctrlKey || e.metaKey))
+  if (e.key === 'ArrowRight') return void (e.preventDefault(), moveSelection(0, 1, e.ctrlKey || e.metaKey))
 
   if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
     e.preventDefault()
@@ -291,9 +338,10 @@ function toggleTheme() {
           <SudokuBoard
             :cells="state.cells"
             :selected="state.selected"
+            :multi-selected="state.multiSelected"
             :conflicts="conflicts"
             :class="{ 'error-shake': errorActive }"
-            @select="selectCell"
+            @select="(pos) => selectCell(pos)"
           />
 
           <!-- hidden marker used to target error animation in CSS -->
@@ -303,12 +351,7 @@ function toggleTheme() {
         <aside class="sidepanel">
           <div class="sidepanel-section">
             <div class="sidepanel-title">Hunt Setup</div>
-            <label class="control">
-              <span class="control-label">Difficulty</span>
-              <select v-model="difficultyKey" class="select">
-                <option v-for="d in DIFFICULTIES" :key="d.key" :value="d.key">{{ d.label }}</option>
-              </select>
-            </label>
+            <CustomSelect v-model="difficultyKey" :options="DIFFICULTIES" label="Difficulty" />
 
             <div class="btn-row">
               <button class="btn" type="button" @click="newHunt">New Hunt</button>
@@ -324,6 +367,10 @@ function toggleTheme() {
           </div>
 
           <div class="sidepanel-section">
+            <RemainingNumbers :grid="currentGrid" />
+          </div>
+
+          <div class="sidepanel-section">
             <div class="sidepanel-title">Controls</div>
             <ul class="help">
               <li><kbd>1</kbd>–<kbd>9</kbd> place number</li>
@@ -331,6 +378,7 @@ function toggleTheme() {
               <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>1</kbd>–<kbd>9</kbd> toggle <b>center</b> draft</li>
               <li><kbd>Backspace</kbd>/<kbd>Del</kbd> clear</li>
               <li>Arrow keys move selection</li>
+              <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + Arrow keys extend selection (multi-draft)</li>
             </ul>
           </div>
 
@@ -520,16 +568,7 @@ h1 {
   font-size: 12px;
 }
 
-.select {
-  appearance: none;
-  width: 100%;
-  padding: 12px 12px;
-  border-radius: 12px;
-  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
-  background: color-mix(in oklab, var(--panel) 90%, transparent);
-  color: var(--bone);
-  outline: none;
-}
+/* native select styles removed (CustomSelect now used) */
 
 .btn-row {
   margin-top: 10px;
