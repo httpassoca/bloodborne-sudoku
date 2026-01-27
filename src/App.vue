@@ -855,26 +855,6 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
 
             <div class="btn-row">
               <button class="btn danger" type="button" @click="revealSolution">{{ t('reveal') }}</button>
-              <button class="btn" type="button" @click="toggleCompanionKill">
-                {{ state.companion.running ? t('stopCompanion') : t('companionKill') }}
-              </button>
-            </div>
-
-            <div class="speed">
-              <div class="speed-head">
-                <span class="speed-label">{{ t('companionSpeed') }}</span>
-                <span class="speed-value">{{ (state.companion.speedMs / 1000).toFixed(2) }}s</span>
-              </div>
-
-              <select v-model="state.companion.speedPreset" class="speed-select">
-                <option v-for="p in speedPresets" :key="p.key" :value="p.key">{{ p.label }}</option>
-              </select>
-            </div>
-
-            <div class="companion-log" :class="{ active: state.companion.running }">
-              <div class="companion-title">{{ t('companionLog') }}</div>
-              <div class="companion-text">{{ state.companion.message }}</div>
-              <div class="companion-hint">{{ t('companion.decisionHint') }}</div>
             </div>
           </div>
 
@@ -892,6 +872,35 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
                   <span class="pill-value">{{ statusText }}</span>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div class="sidepanel-section companion-panel">
+            <div class="sidepanel-title">{{ t('companionTitle') }}</div>
+
+            <div class="btn-row companion-row">
+              <button class="btn" type="button" @click="toggleCompanionKill">
+                {{ state.companion.running ? t('stopCompanion') : t('companionKill') }}
+              </button>
+              <button class="btn ghost" type="button" @click="undo">Undo</button>
+              <button class="btn ghost" type="button" @click="clearSelected">{{ t('clear') }}</button>
+            </div>
+
+            <div class="speed">
+              <div class="speed-head">
+                <span class="speed-label">{{ t('companionSpeed') }}</span>
+                <span class="speed-value">{{ (state.companion.speedMs / 1000).toFixed(2) }}s</span>
+              </div>
+
+              <select v-model="state.companion.speedPreset" class="speed-select">
+                <option v-for="p in speedPresets" :key="p.key" :value="p.key">{{ p.label }}</option>
+              </select>
+            </div>
+
+            <div class="companion-log" :class="{ active: state.companion.running }">
+              <div class="companion-title">{{ t('companionLog') }}</div>
+              <div class="companion-text">{{ state.companion.message }}</div>
+              <div class="companion-hint">{{ t('companion.decisionHint') }}</div>
             </div>
           </div>
         </aside>
@@ -1216,6 +1225,11 @@ kbd {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
+}
+
+/* companion panel: keep primary action bigger */
+.companion-row {
+  grid-template-columns: 1.4fr 0.8fr 0.8fr;
 }
 
 .btn {
