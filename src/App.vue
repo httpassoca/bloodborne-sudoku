@@ -1487,20 +1487,21 @@ kbd {
   font-family: 'Cinzel', ui-serif;
   letter-spacing: 0.12em;
   font-weight: 900;
-  font-size: clamp(20px, 4vw, 40px);
-  color: color-mix(in oklab, var(--bone) 86%, white);
-  text-shadow: 0 0 18px color-mix(in oklab, var(--blood) 35%, transparent);
+  font-size: clamp(28px, 6vw, 56px);
+  color: color-mix(in oklab, var(--bone) 90%, white);
+  text-shadow: 0 0 22px color-mix(in oklab, var(--blood) 40%, transparent);
 }
 
 .victory-sub {
-  margin-top: 10px;
-  opacity: 0.9;
+  margin-top: 12px;
+  opacity: 0.92;
+  font-size: clamp(16px, 2.6vw, 20px);
 }
 
 .victory-hint {
-  margin-top: 10px;
-  opacity: 0.75;
-  font-size: 12px;
+  margin-top: 12px;
+  opacity: 0.8;
+  font-size: 14px;
   letter-spacing: 0.06em;
 }
 
