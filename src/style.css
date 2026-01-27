@@ -54,19 +54,20 @@ html, body { height: 100%; }
 body {
   margin: 0;
   color: var(--bone);
+  /* Limit gradient sizes so ultrawide screens don't look washed/weird */
   background:
-    radial-gradient(1200px 800px at 10% 10%, color-mix(in oklab, var(--blood) 22%, transparent), transparent 60%),
-    radial-gradient(900px 700px at 90% 20%, color-mix(in oklab, var(--violet) 14%, transparent), transparent 62%),
-    radial-gradient(900px 700px at 40% 120%, color-mix(in oklab, var(--mist) 12%, transparent), transparent 65%),
+    radial-gradient(900px 600px at 12% 10%, color-mix(in oklab, var(--blood) 22%, transparent), transparent 62%),
+    radial-gradient(780px 560px at 88% 18%, color-mix(in oklab, var(--violet) 14%, transparent), transparent 64%),
+    radial-gradient(900px 700px at 50% 120%, color-mix(in oklab, var(--mist) 12%, transparent), transparent 66%),
     linear-gradient(180deg, color-mix(in oklab, var(--bg) 96%, black), var(--bg));
   font-family: 'IM Fell English', ui-serif, Georgia, 'Times New Roman', Times, serif;
 }
 
 :root[data-theme='light'] body {
   background:
-    radial-gradient(1200px 800px at 10% 10%, color-mix(in oklab, var(--blood) 12%, transparent), transparent 60%),
-    radial-gradient(900px 700px at 90% 20%, color-mix(in oklab, var(--gold) 12%, transparent), transparent 62%),
-    radial-gradient(900px 700px at 40% 120%, color-mix(in oklab, var(--mist) 10%, transparent), transparent 65%),
+    radial-gradient(900px 600px at 12% 10%, color-mix(in oklab, var(--blood) 12%, transparent), transparent 62%),
+    radial-gradient(780px 560px at 88% 18%, color-mix(in oklab, var(--gold) 12%, transparent), transparent 64%),
+    radial-gradient(900px 700px at 50% 120%, color-mix(in oklab, var(--mist) 10%, transparent), transparent 66%),
     linear-gradient(180deg, #fbf7f0, var(--bg));
 }
 

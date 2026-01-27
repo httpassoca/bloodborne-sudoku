@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
+import { Volume2, Sun, Moon } from 'lucide-vue-next'
 import SudokuBoard from './components/SudokuBoard.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
@@ -782,12 +783,44 @@ function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
 }
 
-const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
+// theme icon handled via lucide components
 
 const sound = reactive({
   open: false,
   volume: Number(localStorage.getItem('bbs_volume') || 0.2),
+  x: 0,
+  y: 0,
 })
+
+const soundWrapEl = ref(null)
+const soundBtnEl = ref(null)
+
+function toggleSound() {
+  sound.open = !sound.open
+  if (sound.open) {
+    nextTick(() => {
+      const r = soundBtnEl.value?.getBoundingClientRect()
+      if (!r) return
+      sound.x = r.left + r.width / 2
+      sound.y = r.bottom + 10
+    })
+  }
+}
+
+function closeSound() {
+  sound.open = false
+}
+
+function onDocPointerDown(e) {
+  if (!sound.open) return
+  const el = soundWrapEl.value
+  if (!el) return
+  if (!el.contains(e.target)) closeSound()
+}
+
+onMounted(() => document.addEventListener('pointerdown', onDocPointerDown))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointerDown))
+
 
 const companionImgUrl = new URL('./assets/img/companion.png', import.meta.url).href
 
@@ -827,31 +860,33 @@ watch(
         <div class="header-actions">
           <CustomSelect v-model="lang" :options="langOptions" label="" />
 
-          <div class="sound-wrap">
+          <div ref="soundWrapEl" class="sound-wrap">
             <button
+              ref="soundBtnEl"
               class="icon-btn"
               type="button"
               aria-label="Sound"
               title="Sound"
-              @click="sound.open = !sound.open"
+              @click="toggleSound"
             >
-              <svg class="vol" viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M3 10v4a2 2 0 0 0 2 2h2l4.6 3.45A1 1 0 0 0 13 18.6V5.4a1 1 0 0 0-1.4-.85L7 8H5a2 2 0 0 0-2 2zm13.5 2a4.5 4.5 0 0 0-2.06-3.8.75.75 0 1 0-.8 1.26A3 3 0 0 1 15 12a3 3 0 0 1-1.36 2.54.75.75 0 1 0 .8 1.26A4.5 4.5 0 0 0 16.5 12zm2.5 0a7 7 0 0 0-3.2-5.9.75.75 0 1 0-.8 1.26A5.5 5.5 0 0 1 17.5 12a5.5 5.5 0 0 1-2.5 4.64.75.75 0 1 0 .8 1.26A7 7 0 0 0 19 12z"
-                />
-              </svg>
+              <Volume2 class="vol" aria-hidden="true" />
             </button>
-            <input
+
+            <div
               v-if="sound.open"
-              class="sound-slider"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              v-model.number="sound.volume"
-              aria-label="Volume"
-            />
+              class="sound-pop"
+              :style="{ left: sound.x + 'px', top: sound.y + 'px' }"
+            >
+              <input
+                class="sound-slider"
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                v-model.number="sound.volume"
+                aria-label="Volume"
+              />
+            </div>
           </div>
 
           <button
@@ -861,7 +896,7 @@ watch(
             title="Toggle theme"
             @click="toggleTheme"
           >
-            {{ themeIcon }}
+            <component :is="theme === 'dark' ? Sun : Moon" class="vol" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -883,6 +918,7 @@ watch(
             :multi-selected="state.multiSelected"
             :conflicts="conflicts"
             :disable-hover="keyboardNav"
+            :disable-same-number="state.companion.running"
             :highlight-key="state.companion.highlightKey"
             :decision="state.companion.decision"
             :flash-key="state.flashKey"
@@ -1254,7 +1290,6 @@ kbd {
   position: relative;
   display: grid;
   align-items: center;
-  z-index: 200;
 }
 
 .vol {
@@ -1262,17 +1297,24 @@ kbd {
   height: 22px;
 }
 
+.sound-pop {
+  position: fixed;
+  z-index: 2000;
+  transform: translateX(-50%);
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 88%, black);
+  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.65);
+}
+
 .sound-slider {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  transform: rotate(-90deg);
-  transform-origin: top right;
   width: 170px;
   height: 26px;
+  transform: rotate(-90deg);
+  transform-origin: center;
   accent-color: var(--blood);
   background: transparent;
-  z-index: 250;
 }
 
 .companion-head {

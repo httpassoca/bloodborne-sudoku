@@ -7,6 +7,7 @@ const props = defineProps({
   multiSelected: { type: Object, required: true },
   conflicts: { type: Object, required: true },
   disableHover: { type: Boolean, default: false },
+  disableSameNumber: { type: Boolean, default: false },
   highlightKey: { type: String, default: '' },
   decision: { type: Object, default: () => ({ r: -1, c: -1, n: 0, kind: '' }) },
   flashKey: { type: String, default: '' },
@@ -34,6 +35,7 @@ function isRelated(r, c) {
 }
 
 function isSameNumber(r, c) {
+  if (props.disableSameNumber) return false
   const sr = props.selected.row
   const sc = props.selected.col
   if (sr === -1 || sc === -1) return false
