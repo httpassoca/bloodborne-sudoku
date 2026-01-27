@@ -347,7 +347,8 @@ async function playChime() {
   try {
     if (!completeAudio) completeAudio = new Audio(completeSfxUrl)
     completeAudio.currentTime = 0
-    completeAudio.volume = sound.volume * 0.6
+    completeAudio.playbackRate = 1.5 // 50% faster
+    completeAudio.volume = sound.volume * 0.6 // 40% lower than master
     await completeAudio.play()
   } catch {
     // ignore (autoplay restrictions etc.)
@@ -766,6 +767,9 @@ const sound = reactive({
   volume: Number(localStorage.getItem('bbs_volume') || 0.85),
 })
 
+const companionImgUrl = new URL('./assets/img/companion.png', import.meta.url).href
+
+
 watch(
   () => sound.volume,
   () => {
@@ -809,7 +813,12 @@ watch(
               title="Sound"
               @click="sound.open = !sound.open"
             >
-              ︳
+              <svg class="vol" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M3 10v4a2 2 0 0 0 2 2h2l4.6 3.45A1 1 0 0 0 13 18.6V5.4a1 1 0 0 0-1.4-.85L7 8H5a2 2 0 0 0-2 2zm13.5 2a4.5 4.5 0 0 0-2.06-3.8.75.75 0 1 0-.8 1.26A3 3 0 0 1 15 12a3 3 0 0 1-1.36 2.54.75.75 0 1 0 .8 1.26A4.5 4.5 0 0 0 16.5 12zm2.5 0a7 7 0 0 0-3.2-5.9.75.75 0 1 0-.8 1.26A5.5 5.5 0 0 1 17.5 12a5.5 5.5 0 0 1-2.5 4.64.75.75 0 1 0 .8 1.26A7 7 0 0 0 19 12z"
+                />
+              </svg>
             </button>
             <input
               v-if="sound.open"
@@ -863,7 +872,7 @@ watch(
               <button class="tool" :class="{ on: entryMode === 'value' }" type="button" @click="entryMode = 'value'">123</button>
               <button class="tool" :class="{ on: entryMode === 'corner' }" type="button" @click="entryMode = 'corner'">↖</button>
               <button class="tool" :class="{ on: entryMode === 'center' }" type="button" @click="entryMode = 'center'">◎</button>
-              <button class="tool danger" type="button" @click="clearSelected">⌫</button>
+              <!-- clear removed -->
             </div>
             <div class="pad-nums">
               <button v-for="n in 9" :key="n" class="num" type="button" @click="mobilePress(n)">{{ n }}</button>
@@ -895,7 +904,6 @@ watch(
             <div class="btn-row">
               <button class="btn" type="button" @click="newHunt">{{ t('newHunt') }}</button>
               <button class="btn ghost" type="button" @click="undo">Undo</button>
-              <button class="btn ghost" type="button" @click="clearSelected">{{ t('clear') }}</button>
             </div>
 
             <div class="btn-row">
@@ -921,14 +929,19 @@ watch(
           </div>
 
           <div class="sidepanel-section companion-panel">
-            <div class="sidepanel-title">{{ t('companionTitle') }}</div>
+
+            <div class="companion-head">
+              <img class="companion-img" :src="companionImgUrl" alt="Companion" />
+              <div>
+                <div class="sidepanel-title" style="margin:0">{{ t('companionTitle') }}</div>
+                <div class="companion-sub">{{ t('companion.decisionHint') }}</div>
+              </div>
+            </div>
 
             <div class="btn-row companion-row">
               <button class="btn" type="button" @click="toggleCompanionKill">
                 {{ state.companion.running ? t('stopCompanion') : t('companionKill') }}
               </button>
-              <button class="btn ghost" type="button" @click="undo">Undo</button>
-              <button class="btn ghost" type="button" @click="clearSelected">{{ t('clear') }}</button>
             </div>
 
             <div class="speed">
@@ -1227,6 +1240,11 @@ kbd {
   align-items: center;
 }
 
+.vol {
+  width: 22px;
+  height: 22px;
+}
+
 .sound-slider {
   position: absolute;
   top: calc(100% + 10px);
@@ -1236,6 +1254,33 @@ kbd {
   height: 26px;
   accent-color: var(--blood);
   background: transparent;
+}
+
+.companion-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.companion-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  object-fit: cover;
+  background: color-mix(in oklab, var(--panel) 80%, transparent);
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  box-shadow: 0 14px 40px var(--shadow);
+  filter: drop-shadow(0 0 18px color-mix(in oklab, var(--blood) 20%, transparent)) contrast(1.12) saturate(1.05);
+}
+
+:root[data-theme='light'] .companion-img {
+  filter: drop-shadow(0 0 18px color-mix(in oklab, var(--blood) 18%, transparent)) contrast(1.1) saturate(1.0);
+}
+
+.companion-sub {
+  opacity: 0.8;
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .setup-row {
