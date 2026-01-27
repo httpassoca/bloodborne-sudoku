@@ -2,12 +2,12 @@
 import SudokuCell from './SudokuCell.vue'
 
 const props = defineProps({
-  cells: { type: Array, required: true }, // 9x9 cell objects
-  selected: { type: Object, required: true }, // {row,col}
-  multiSelected: { type: Object, required: true }, // Set of "r,c"
-  conflicts: { type: Object, required: true }, // Set of "r,c"
+  cells: { type: Array, required: true },
+  selected: { type: Object, required: true },
+  multiSelected: { type: Object, required: true },
+  conflicts: { type: Object, required: true },
   disableHover: { type: Boolean, default: false },
-  highlightKey: { type: String, default: '' }, // "r,c" for companion kill animation
+  highlightKey: { type: String, default: '' },
   decision: { type: Object, default: () => ({ r: -1, c: -1, n: 0, kind: '' }) },
   flashKey: { type: String, default: '' },
 })
@@ -36,7 +36,7 @@ function isRelated(r, c) {
   return false
 }
 
-function boxClass(r, c) {
+function wrapClass(r, c) {
   return {
     'thick-left': c % 3 === 0,
     'thick-top': r % 3 === 0,
@@ -61,26 +61,29 @@ function decisionFlags(r, c) {
 </script>
 
 <template>
-  <div class="board" :class="{ 'no-hover': disableHover }" role="grid" aria-label="Sudoku board">
+  <div class="board" role="grid" aria-label="Sudoku board">
     <template v-for="(row, r) in cells" :key="r">
-      <SudokuCell
+      <div
         v-for="(cell, c) in row"
         :key="`${r}-${c}`"
-        :cell="cell"
-        :row="r"
-        :col="c"
-        :selected="selected.row === r && selected.col === c"
-        :multi="multiSelected.has(`${r},${c}`)"
-        :disable-hover="disableHover"
-        :highlighted="highlightKey === `${r},${c}`"
-        :flashed="flashKey === `${r},${c}`"
-        :decision-flags="decisionFlags(r, c)"
-        :related="isRelated(r, c)"
-        :conflicted="conflicts.has(`${r},${c}`)"
-        class="board-cell"
-        :class="boxClass(r, c)"
-        @select="onSelect"
-      />
+        class="cell-wrap"
+        :class="wrapClass(r, c)"
+      >
+        <SudokuCell
+          :cell="cell"
+          :row="r"
+          :col="c"
+          :selected="selected.row === r && selected.col === c"
+          :multi="multiSelected.has(`${r},${c}`)"
+          :disable-hover="disableHover"
+          :highlighted="highlightKey === `${r},${c}`"
+          :flashed="flashKey === `${r},${c}`"
+          :decision-flags="decisionFlags(r, c)"
+          :related="isRelated(r, c)"
+          :conflicted="conflicts.has(`${r},${c}`)"
+          @select="onSelect"
+        />
+      </div>
     </template>
   </div>
 </template>
@@ -96,13 +99,27 @@ function decisionFlags(r, c) {
   border: 0;
 }
 
-/* Thick separators without affecting layout width */
-.board-cell.thick-left { box-shadow: inset 3px 0 0 color-mix(in oklab, var(--ink) 70%, transparent); }
-.board-cell.thick-top { box-shadow: inset 0 3px 0 color-mix(in oklab, var(--ink) 70%, transparent); }
+/* IMPORTANT: separators must NOT use box-shadow on the cell button itself,
+   otherwise they override selection/conflict glows. Wrap handles separators. */
+.cell-wrap {
+  position: relative;
+}
 
-.board-cell.thick-left.thick-top {
-  box-shadow:
-    inset 3px 0 0 color-mix(in oklab, var(--ink) 70%, transparent),
-    inset 0 3px 0 color-mix(in oklab, var(--ink) 70%, transparent);
+.cell-wrap.thick-left::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: color-mix(in oklab, var(--ink) 70%, transparent);
+  pointer-events: none;
+}
+
+.cell-wrap.thick-top::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: color-mix(in oklab, var(--ink) 70%, transparent);
+  pointer-events: none;
 }
 </style>

@@ -141,7 +141,8 @@ const cornerSlots = [
 
 .cell.multi {
   background: color-mix(in oklab, var(--panel) 68%, var(--mist) 10%);
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--mist) 30%, transparent) inset;
+  outline: 2px solid color-mix(in oklab, var(--mist) 45%, transparent);
+  outline-offset: -2px;
 }
 
 .cell.given {
