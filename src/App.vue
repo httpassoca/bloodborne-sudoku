@@ -869,6 +869,8 @@ watch(
       <div class="hud">
         <div class="pill"><span class="pill-label">{{ t('score') }}</span><span class="pill-value">{{ state.score || '—' }}</span></div>
         <div class="pill"><span class="pill-label">{{ t('best') }}</span><span class="pill-value">{{ state.bestScore || '—' }}</span></div>
+        <div class="pill"><span class="pill-label">{{ t('time') }}</span><span class="pill-value">{{ timeLabel }}</span></div>
+        <div class="pill"><span class="pill-label">{{ t('status') }}</span><span class="pill-value">{{ statusText }}</span></div>
       </div>
     </header>
 
@@ -937,16 +939,7 @@ watch(
             <div class="remaining-row">
               <RemainingNumbers :grid="currentGrid" :title="t('remaining')" :all-text="t('allNumbersPlaced')" />
 
-              <div class="mini-hud">
-                <div class="pill">
-                  <span class="pill-label">{{ t('time') }}</span>
-                  <span class="pill-value">{{ timeLabel }}</span>
-                </div>
-                <div class="pill">
-                  <span class="pill-label">{{ t('status') }}</span>
-                  <span class="pill-value">{{ statusText }}</span>
-                </div>
-              </div>
+              <!-- moved Time/Status to header -->
             </div>
           </div>
 
@@ -1114,7 +1107,7 @@ h1 {
 
 .hud {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
 
@@ -1254,12 +1247,14 @@ kbd {
 .header-actions :deep(.trigger) {
   height: 44px;
   padding: 10px 12px;
+  min-width: 170px;
 }
 
 .sound-wrap {
   position: relative;
   display: grid;
   align-items: center;
+  z-index: 200;
 }
 
 .vol {
@@ -1269,14 +1264,15 @@ kbd {
 
 .sound-slider {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 10px);
   right: 0;
   transform: rotate(-90deg);
   transform-origin: top right;
-  width: 160px;
+  width: 170px;
   height: 26px;
   accent-color: var(--blood);
   background: transparent;
+  z-index: 250;
 }
 
 .companion-head {
@@ -1462,15 +1458,15 @@ kbd {
   inset: 0;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 240ms ease;
+  transition: opacity 600ms ease;
   display: grid;
   place-items: center;
   z-index: 50;
   background:
-    radial-gradient(800px 500px at 50% 45%, color-mix(in oklab, var(--blood) 25%, transparent), transparent 60%),
-    radial-gradient(1200px 800px at 50% 110%, color-mix(in oklab, var(--mist) 12%, transparent), transparent 60%),
-    rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(3px);
+    radial-gradient(900px 600px at 50% 40%, color-mix(in oklab, var(--blood) 28%, transparent), transparent 62%),
+    radial-gradient(1400px 900px at 50% 120%, color-mix(in oklab, var(--mist) 14%, transparent), transparent 65%),
+    rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(6px);
 }
 
 .victory.show {
@@ -1480,11 +1476,11 @@ kbd {
 .victory-inner {
   padding: 18px;
   border-radius: 18px;
-  background: color-mix(in oklab, var(--panel) 80%, transparent);
+  background: color-mix(in oklab, var(--panel) 76%, black);
   border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
-  box-shadow: 0 24px 80px var(--shadow);
+  box-shadow: 0 28px 110px rgba(0, 0, 0, 0.75);
   text-align: center;
-  animation: victory-rise 560ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: victory-rise 1400ms cubic-bezier(0.15, 0.85, 0.2, 1);
 }
 
 .victory-title {
@@ -1509,8 +1505,9 @@ kbd {
 }
 
 @keyframes victory-rise {
-  0% { transform: translateY(10px) scale(0.98); filter: blur(2px); }
-  100% { transform: translateY(0) scale(1); filter: blur(0); }
+  0% { transform: translateY(18px) scale(0.96); filter: blur(4px); opacity: 0.85; }
+  60% { transform: translateY(0) scale(1.01); filter: blur(0); opacity: 1; }
+  100% { transform: translateY(0) scale(1); filter: blur(0); opacity: 1; }
 }
 
 /* board error shake */
@@ -1544,6 +1541,12 @@ kbd {
   }
 
   .remaining-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 980px) {
+  .hud {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 560px) {

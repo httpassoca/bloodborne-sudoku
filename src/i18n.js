@@ -1,6 +1,6 @@
 export const LANGS = [
-  { key: 'en', label: 'EN' },
-  { key: 'pt-BR', label: 'PT-BR' },
+  { key: 'en', label: 'English' },
+  { key: 'pt-BR', label: 'Português (Brasil)' },
 ]
 
 export const MESSAGES = {
