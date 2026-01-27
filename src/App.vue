@@ -215,8 +215,20 @@ function keyOf(r, c) {
   return `${r},${c}`
 }
 
-function selectCell({ row, col, mode = 'replace', additive = false }) {
+function clearCompanionVisuals() {
+  state.companion.highlightKey = ''
+  state.companion.decision = { r: -1, c: -1, n: 0, kind: '' }
+  state.flashKey = ''
+}
+
+function selectCell({ row, col, mode = 'replace', additive = false, source = 'user' }) {
   if (additive && mode === 'replace') mode = 'toggle'
+
+  if (source === 'user') {
+    // user took control back: stop companion + clear its visual overlays
+    if (state.companion.running) stopCompanion()
+    clearCompanionVisuals()
+  }
 
   const r = clamp(row, 0, 8)
   const c = clamp(col, 0, 8)
@@ -413,6 +425,10 @@ function flashCell(r, c) {
 
 function handleNumber(n, mode, source = 'user') {
   if (state.finished) return
+  if (source === 'user') {
+    if (state.companion.running) stopCompanion()
+    clearCompanionVisuals()
+  }
 
   // Drafting can apply to multiple selected cells.
   if (mode === 'corner' || mode === 'center') {
@@ -523,7 +539,7 @@ function highlightStep(r, c, message, n = 0, kind = '') {
   })
   state.companion.message = message
   if (n) setDecision(r, c, n, kind)
-  selectCell({ row: r, col: c, mode: 'replace' })
+  selectCell({ row: r, col: c, mode: 'replace', source: 'companion' })
 }
 
 function applyStep(r, c, n) {
@@ -628,7 +644,7 @@ function undoLastUserMove() {
   cell.value = m.prev
   // keep drafts, but flash for explanation
   flashCell(m.r, m.c)
-  selectCell({ row: m.r, col: m.c, mode: 'replace' })
+  selectCell({ row: m.r, col: m.c, mode: 'replace', source: 'companion' })
   checkCompletesAndSound()
   return true
 }
