@@ -283,6 +283,7 @@ function tryFinishCheck() {
 
     state.victoryVisible = true
     victoryBurst.value++
+    playVictorySfx()
 
     state.companion.running = false
   }
@@ -307,6 +308,19 @@ function pulseError() {
 
 // victory overlay burst counter (forces re-run of CSS animation)
 const victoryBurst = ref(0)
+
+const victorySfxUrl = new URL('./assets/sfx/victory.mp3', import.meta.url).href
+let victoryAudio = null
+async function playVictorySfx() {
+  try {
+    if (!victoryAudio) victoryAudio = new Audio(victorySfxUrl)
+    victoryAudio.currentTime = 0
+    victoryAudio.volume = 0.85
+    await victoryAudio.play()
+  } catch {
+    // autoplay may be blocked on some browsers; ignore
+  }
+}
 
 function removeDraftFromRowCol(r, c, n) {
   for (let i = 0; i < 9; i++) {
@@ -464,6 +478,7 @@ function revealSolution() {
   state.score = scoreFor(difficultyKey.value, elapsedSeconds.value)
   state.victoryVisible = true
   victoryBurst.value++
+  playVictorySfx()
   state.companion.running = false
 }
 
