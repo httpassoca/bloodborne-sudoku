@@ -615,7 +615,15 @@ function undoLastUserMove() {
   // keep drafts, but flash for explanation
   flashCell(m.r, m.c)
   selectCell({ row: m.r, col: m.c, mode: 'replace' })
+  checkCompletesAndSound()
   return true
+}
+
+function undo() {
+  if (state.finished) return
+  const ok = undoLastUserMove()
+  if (!ok) return
+  // note: errors counter is "mistakes made" and is not decremented on undo
 }
 
 function companionCorrectErrorsStep() {
@@ -671,6 +679,13 @@ function onKeyDown(e) {
 
   const tag = (e.target?.tagName || '').toLowerCase()
   if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'option') return
+
+  // Ctrl+Z / Cmd+Z => undo
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+    e.preventDefault()
+    undo()
+    return
+  }
 
   // Arrow navigation => disable hover until mouse is used again
   if (e.key.startsWith('Arrow')) keyboardNav.value = true
@@ -834,6 +849,7 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
 
             <div class="btn-row">
               <button class="btn" type="button" @click="newHunt">{{ t('newHunt') }}</button>
+              <button class="btn ghost" type="button" @click="undo">Undo</button>
               <button class="btn ghost" type="button" @click="clearSelected">{{ t('clear') }}</button>
             </div>
 
@@ -1198,7 +1214,7 @@ kbd {
 .btn-row {
   margin-top: 10px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 
