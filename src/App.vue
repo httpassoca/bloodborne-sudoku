@@ -171,6 +171,7 @@ function newHunt() {
   state.history = []
   state.lastCompletes = { rows: new Set(), cols: new Set(), boxes: new Set() }
   state.flashKey = ''
+  completeSfxCount = 0
 
   loadBestScore()
 }
@@ -368,6 +369,8 @@ async function playChime() {
 }
 
 let lastCompleteSfxAt = 0
+let completeSfxCount = 0
+const COMPLETE_SFX_MAX = 10
 function checkCompletesAndSound() {
   const g = currentGrid.value
   // rows
@@ -376,8 +379,9 @@ function checkCompletesAndSound() {
     if (complete && !state.lastCompletes.rows.has(r)) {
       state.lastCompletes.rows.add(r)
       const now = Date.now()
-      if (now - lastCompleteSfxAt > 120) {
+      if (completeSfxCount < COMPLETE_SFX_MAX && now - lastCompleteSfxAt > 120) {
         lastCompleteSfxAt = now
+        completeSfxCount++
         playChime()
       }
     }
@@ -389,8 +393,9 @@ function checkCompletesAndSound() {
     if (complete && !state.lastCompletes.cols.has(c)) {
       state.lastCompletes.cols.add(c)
       const now = Date.now()
-      if (now - lastCompleteSfxAt > 120) {
+      if (completeSfxCount < COMPLETE_SFX_MAX && now - lastCompleteSfxAt > 120) {
         lastCompleteSfxAt = now
+        completeSfxCount++
         playChime()
       }
     }
@@ -406,8 +411,9 @@ function checkCompletesAndSound() {
       if (complete && !state.lastCompletes.boxes.has(bi)) {
         state.lastCompletes.boxes.add(bi)
         const now = Date.now()
-        if (now - lastCompleteSfxAt > 120) {
+        if (completeSfxCount < COMPLETE_SFX_MAX && now - lastCompleteSfxAt > 120) {
           lastCompleteSfxAt = now
+          completeSfxCount++
           playChime()
         }
       }
@@ -780,7 +786,7 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
 
 const sound = reactive({
   open: false,
-  volume: Number(localStorage.getItem('bbs_volume') || 0.85),
+  volume: Number(localStorage.getItem('bbs_volume') || 0.2),
 })
 
 const companionImgUrl = new URL('./assets/img/companion.png', import.meta.url).href
@@ -1263,10 +1269,11 @@ kbd {
 
 .sound-slider {
   position: absolute;
-  top: calc(100% + 10px);
-  left: 50%;
-  transform: translateX(-50%) rotate(-90deg);
-  width: 140px;
+  top: calc(100% + 6px);
+  right: 0;
+  transform: rotate(-90deg);
+  transform-origin: top right;
+  width: 160px;
   height: 26px;
   accent-color: var(--blood);
   background: transparent;
