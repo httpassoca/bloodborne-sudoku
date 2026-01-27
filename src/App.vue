@@ -315,7 +315,7 @@ async function playVictorySfx() {
   try {
     if (!victoryAudio) victoryAudio = new Audio(victorySfxUrl)
     victoryAudio.currentTime = 0
-    victoryAudio.volume = 0.85
+    victoryAudio.volume = sound.volume
     await victoryAudio.play()
   } catch {
     // autoplay may be blocked on some browsers; ignore
@@ -347,13 +347,14 @@ async function playChime() {
   try {
     if (!completeAudio) completeAudio = new Audio(completeSfxUrl)
     completeAudio.currentTime = 0
-    completeAudio.volume = 0.8
+    completeAudio.volume = sound.volume * 0.6
     await completeAudio.play()
   } catch {
     // ignore (autoplay restrictions etc.)
   }
 }
 
+let lastCompleteSfxAt = 0
 function checkCompletesAndSound() {
   const g = currentGrid.value
   // rows
@@ -361,7 +362,11 @@ function checkCompletesAndSound() {
     const complete = g[r].every((v) => v >= 1 && v <= 9)
     if (complete && !state.lastCompletes.rows.has(r)) {
       state.lastCompletes.rows.add(r)
-      playChime()
+      const now = Date.now()
+      if (now - lastCompleteSfxAt > 120) {
+        lastCompleteSfxAt = now
+        playChime()
+      }
     }
   }
   // cols
@@ -370,7 +375,11 @@ function checkCompletesAndSound() {
     for (let r = 0; r < 9; r++) if (!g[r][c]) complete = false
     if (complete && !state.lastCompletes.cols.has(c)) {
       state.lastCompletes.cols.add(c)
-      playChime()
+      const now = Date.now()
+      if (now - lastCompleteSfxAt > 120) {
+        lastCompleteSfxAt = now
+        playChime()
+      }
     }
   }
   // boxes
@@ -383,7 +392,11 @@ function checkCompletesAndSound() {
       const bi = br * 3 + bc
       if (complete && !state.lastCompletes.boxes.has(bi)) {
         state.lastCompletes.boxes.add(bi)
-        playChime()
+        const now = Date.now()
+        if (now - lastCompleteSfxAt > 120) {
+          lastCompleteSfxAt = now
+          playChime()
+        }
       }
     }
   }
@@ -747,6 +760,21 @@ function toggleTheme() {
 }
 
 const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
+
+const sound = reactive({
+  open: false,
+  volume: Number(localStorage.getItem('bbs_volume') || 0.85),
+})
+
+watch(
+  () => sound.volume,
+  () => {
+    localStorage.setItem('bbs_volume', String(sound.volume))
+    if (victoryAudio) victoryAudio.volume = sound.volume
+    if (completeAudio) completeAudio.volume = sound.volume * 0.6
+  }
+)
+
 </script>
 
 <template>
@@ -772,6 +800,29 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
 
         <div class="header-actions">
           <CustomSelect v-model="lang" :options="langOptions" label="" />
+
+          <div class="sound-wrap">
+            <button
+              class="icon-btn"
+              type="button"
+              aria-label="Sound"
+              title="Sound"
+              @click="sound.open = !sound.open"
+            >
+              ︳
+            </button>
+            <input
+              v-if="sound.open"
+              class="sound-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              v-model.number="sound.volume"
+              aria-label="Volume"
+            />
+          </div>
+
           <button
             class="icon-btn"
             type="button"
@@ -817,12 +868,6 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
             <div class="pad-nums">
               <button v-for="n in 9" :key="n" class="num" type="button" @click="mobilePress(n)">{{ n }}</button>
             </div>
-          </section>
-
-          <!-- Companion explanation (text) -->
-          <section class="companion-explain" aria-label="Companion explanation">
-            <div class="companion-explain-title">{{ t('companionTitle') }}</div>
-            <div class="companion-explain-text">{{ state.companion.message }}</div>
           </section>
 
           <!-- Instructions (not a dropdown): subtle until hover -->
@@ -1101,26 +1146,6 @@ h1 {
   max-width: 100%;
 }
 
-.companion-explain {
-  border-radius: 18px;
-  padding: 12px 12px;
-  background: color-mix(in oklab, var(--panel) 70%, transparent);
-  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
-  opacity: 0.8;
-}
-
-.companion-explain-title {
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 12px;
-  opacity: 0.85;
-  margin-bottom: 6px;
-}
-
-.companion-explain-text {
-  opacity: 0.92;
-  line-height: 1.35;
-}
 
 .instructions {
   border-radius: 18px;
@@ -1194,6 +1219,23 @@ kbd {
 .header-actions :deep(.trigger) {
   height: 44px;
   padding: 10px 12px;
+}
+
+.sound-wrap {
+  position: relative;
+  display: grid;
+  align-items: center;
+}
+
+.sound-slider {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) rotate(-90deg);
+  width: 140px;
+  height: 26px;
+  accent-color: var(--blood);
+  background: transparent;
 }
 
 .setup-row {
