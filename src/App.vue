@@ -746,11 +746,26 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
     </div>
 
     <header class="top">
-      <div class="brand">
-        <div class="sigil" aria-hidden="true" />
-        <div>
-          <h1>{{ t('appTitle') }}</h1>
-          <p class="subtitle">{{ t('subtitle') }}</p>
+      <div class="top-row">
+        <div class="brand">
+          <div class="sigil" aria-hidden="true" />
+          <div>
+            <h1>{{ t('appTitle') }}</h1>
+            <p class="subtitle">{{ t('subtitle') }}</p>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <CustomSelect v-model="lang" :options="langOptions" label="" />
+          <button
+            class="icon-btn"
+            type="button"
+            :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+            title="Toggle theme"
+            @click="toggleTheme"
+          >
+            {{ themeIcon }}
+          </button>
         </div>
       </div>
 
@@ -815,19 +830,6 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
 
             <div class="setup-row">
               <CustomSelect v-model="difficultyKey" :options="difficultiesLocalized" :label="t('difficulty')" />
-
-              <div class="icon-stack">
-                <CustomSelect v-model="lang" :options="langOptions" label="Lang" />
-                <button
-                  class="icon-btn"
-                  type="button"
-                  :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-                  title="Toggle theme"
-                  @click="toggleTheme"
-                >
-                  {{ themeIcon }}
-                </button>
-              </div>
             </div>
 
             <div class="btn-row">
@@ -1150,21 +1152,30 @@ kbd {
   margin-bottom: 10px;
 }
 
+.top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.header-actions {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 10px;
+  align-items: start;
+}
+
+.header-actions :deep(.trigger) {
+  height: 44px;
+  padding: 10px 12px;
+}
+
 .setup-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: 10px;
   align-items: end;
-}
-
-.icon-stack {
-  display: grid;
-  gap: 10px;
-  align-content: end;
-}
-
-.icon-stack :deep(.trigger) {
-  height: 44px;
 }
 
 .icon-btn {

@@ -1,93 +1,73 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IM+Fell+English:ital@0;1&display=swap');
 
 /*
-  Bloodborne-inspired palette updated per request.
-  Dark mode base:
-  - Tamarillo #9A1818
-  - Black Wool #34302F
-  - Superhard #1A0B06
-  - Old Red #7F3335
-  - Au Chico #99585C
-  - Pale Mocha #C5A8AA
+  Bloodborne-inspired palette (not official assets).
+  Higher contrast accents while staying gothic/aged.
 */
 :root {
-  /* base surfaces */
-  --bg: #1A0B06;       /* Superhard */
-  --panel: #34302F;    /* Black Wool */
-  --ink: #221b19;      /* derived: deeper outline */
-  --bone: #C5A8AA;     /* Pale Mocha */
+  --bg: #050304;
+  --panel: #120d10;
+  --ink: #261a1f;
+  --bone: #f0e4d6; /* brighter for contrast */
 
-  /* accents */
-  --blood: #9A1818;    /* Tamarillo */
-  --ember: #7F3335;    /* Old Red */
-  --gold: #C5A8AA;     /* Pale Mocha (used as highlight) */
-  --mist: #99585C;     /* Au Chico */
-  --sage: #99585C;     /* keep in-family */
-  --violet: #7F3335;   /* keep in-family */
+  --blood: #b10f2a; /* deeper + brighter */
+  --ember: #e0652c;
+  --gold: #d0a941;
+  --mist: #aeb7c9;
+  --sage: #78a08a;
+  --violet: #6a4b86;
 
   /* extra accents */
-  --steel: #6a5c5a;    /* derived */
-  --inkblue: #3a2a2a;  /* derived (warm) */
-  --teal: #6b3b3e;     /* derived */
-  --wax: #C5A8AA;      /* Pale Mocha */
+  --steel: #7b8a96;
+  --inkblue: #36507a;
+  --teal: #2f8b83;
+  --wax: #e0d0b6;
 
-  --shadow: rgba(0, 0, 0, 0.62);
+  --shadow: rgba(0, 0, 0, 0.55);
 }
 
-/*
-  Light mode based on the same family:
-  - use Pale Mocha as background
-  - keep reds as accents
-  - keep Black Wool / Superhard for text + outlines
-*/
 :root[data-theme='light'] {
-  --bg: #F2E7E7;       /* derived from Pale Mocha */
-  --panel: #FFFFFF;
-  --ink: #34302F;      /* Black Wool */
-  --bone: #1A0B06;     /* Superhard for text */
+  --bg: #f3efe8;
+  --panel: #ffffff;
+  --ink: #c9bfb3;
+  --bone: #1b1715;
 
-  --blood: #9A1818;    /* Tamarillo */
-  --ember: #7F3335;    /* Old Red */
-  --gold: #99585C;     /* Au Chico */
-  --mist: #7F3335;     /* Old Red */
-  --sage: #99585C;
-  --violet: #7F3335;
+  --blood: #9b0f22;
+  --ember: #c04a2a;
+  --gold: #9a7620;
+  --mist: #4b5670;
+  --sage: #2f6f58;
+  --violet: #3b2f55;
 
-  --steel: #6f6766;    /* derived */
-  --inkblue: #4a3b3b;  /* derived */
-  --teal: #8a4a50;     /* derived */
-  --wax: #34302F;      /* Black Wool */
+  --steel: #4f5a64;
+  --inkblue: #2b4470;
+  --teal: #1f6e66;
+  --wax: #6b5a48;
 
-  --shadow: rgba(0, 0, 0, 0.14);
+  --shadow: rgba(0, 0, 0, 0.12);
 }
 
 * { box-sizing: border-box; }
 
 html, body { height: 100%; }
 
-html {
-  overflow-x: hidden;
-  -webkit-text-size-adjust: 100%;
-}
-
 body {
   margin: 0;
   color: var(--bone);
-  overflow-x: hidden;
   background:
-    radial-gradient(1200px 800px at 10% 10%, color-mix(in oklab, var(--blood) 24%, transparent), transparent 60%),
-    radial-gradient(900px 700px at 92% 18%, color-mix(in oklab, var(--mist) 14%, transparent), transparent 62%),
-    radial-gradient(900px 700px at 40% 120%, color-mix(in oklab, var(--ember) 10%, transparent), transparent 65%),
-    linear-gradient(180deg, color-mix(in oklab, var(--bg) 94%, black), var(--bg));
+    radial-gradient(1200px 800px at 10% 10%, color-mix(in oklab, var(--blood) 22%, transparent), transparent 60%),
+    radial-gradient(900px 700px at 90% 20%, color-mix(in oklab, var(--violet) 14%, transparent), transparent 62%),
+    radial-gradient(900px 700px at 40% 120%, color-mix(in oklab, var(--mist) 12%, transparent), transparent 65%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg) 96%, black), var(--bg));
   font-family: 'IM Fell English', ui-serif, Georgia, 'Times New Roman', Times, serif;
 }
 
 :root[data-theme='light'] body {
   background:
-    radial-gradient(1200px 800px at 10% 10%, color-mix(in oklab, var(--blood) 10%, transparent), transparent 60%),
-    radial-gradient(900px 700px at 92% 18%, color-mix(in oklab, var(--gold) 10%, transparent), transparent 62%),
+    radial-gradient(1200px 800px at 10% 10%, color-mix(in oklab, var(--blood) 12%, transparent), transparent 60%),
+    radial-gradient(900px 700px at 90% 20%, color-mix(in oklab, var(--gold) 12%, transparent), transparent 62%),
     radial-gradient(900px 700px at 40% 120%, color-mix(in oklab, var(--mist) 10%, transparent), transparent 65%),
-    linear-gradient(180deg, #ffffff, var(--bg));
+    linear-gradient(180deg, #fbf7f0, var(--bg));
 }
 
 #app { min-height: 100%; }
@@ -99,5 +79,5 @@ h1, h2, h3 {
 a { color: color-mix(in oklab, var(--bone) 80%, var(--blood)); }
 
 ::selection {
-  background: color-mix(in oklab, var(--blood) 40%, transparent);
+  background: color-mix(in oklab, var(--blood) 45%, transparent);
 }
