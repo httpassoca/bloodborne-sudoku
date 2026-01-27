@@ -341,25 +341,16 @@ function boxIndex(r, c) {
   return Math.floor(r / 3) * 3 + Math.floor(c / 3)
 }
 
-function playChime() {
+const completeSfxUrl = new URL('./assets/sfx/complete.mp3', import.meta.url).href
+let completeAudio = null
+async function playChime() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    const o = ctx.createOscillator()
-    const g = ctx.createGain()
-    o.type = 'triangle'
-    o.frequency.value = 440
-    g.gain.value = 0.0001
-    o.connect(g)
-    g.connect(ctx.destination)
-    o.start()
-    const t0 = ctx.currentTime
-    g.gain.exponentialRampToValueAtTime(0.12, t0 + 0.01)
-    o.frequency.exponentialRampToValueAtTime(660, t0 + 0.12)
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25)
-    o.stop(t0 + 0.26)
-    o.onended = () => ctx.close()
+    if (!completeAudio) completeAudio = new Audio(completeSfxUrl)
+    completeAudio.currentTime = 0
+    completeAudio.volume = 0.8
+    await completeAudio.play()
   } catch {
-    // ignore
+    // ignore (autoplay restrictions etc.)
   }
 }
 
