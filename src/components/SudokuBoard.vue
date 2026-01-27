@@ -36,10 +36,15 @@ function isRelated(r, c) {
   return false
 }
 
-function wrapClass(r, c) {
+function gridLineClass(r, c) {
   return {
-    'thick-left': c % 3 === 0,
-    'thick-top': r % 3 === 0,
+    // avoid double borders: we draw only TOP/LEFT borders on cells
+    'no-top': r === 0,
+    'no-left': c === 0,
+
+    // 3x3 separators
+    'thick-top': r === 3 || r === 6,
+    'thick-left': c === 3 || c === 6,
   }
 }
 
@@ -61,29 +66,26 @@ function decisionFlags(r, c) {
 </script>
 
 <template>
-  <div class="board" role="grid" aria-label="Sudoku board">
+  <div class="board" :class="{ 'no-hover': disableHover }" role="grid" aria-label="Sudoku board">
     <template v-for="(row, r) in cells" :key="r">
-      <div
+      <SudokuCell
         v-for="(cell, c) in row"
         :key="`${r}-${c}`"
-        class="cell-wrap"
-        :class="wrapClass(r, c)"
-      >
-        <SudokuCell
-          :cell="cell"
-          :row="r"
-          :col="c"
-          :selected="selected.row === r && selected.col === c"
-          :multi="multiSelected.has(`${r},${c}`)"
-          :disable-hover="disableHover"
-          :highlighted="highlightKey === `${r},${c}`"
-          :flashed="flashKey === `${r},${c}`"
-          :decision-flags="decisionFlags(r, c)"
-          :related="isRelated(r, c)"
-          :conflicted="conflicts.has(`${r},${c}`)"
-          @select="onSelect"
-        />
-      </div>
+        :cell="cell"
+        :row="r"
+        :col="c"
+        :selected="selected.row === r && selected.col === c"
+        :multi="multiSelected.has(`${r},${c}`)"
+        :disable-hover="disableHover"
+        :highlighted="highlightKey === `${r},${c}`"
+        :flashed="flashKey === `${r},${c}`"
+        :decision-flags="decisionFlags(r, c)"
+        :related="isRelated(r, c)"
+        :conflicted="conflicts.has(`${r},${c}`)"
+        class="board-cell"
+        :class="gridLineClass(r, c)"
+        @select="onSelect"
+      />
     </template>
   </div>
 </template>
@@ -96,30 +98,6 @@ function decisionFlags(r, c) {
   padding: 0;
   border-radius: 0;
   background: transparent;
-  border: 0;
-}
-
-/* IMPORTANT: separators must NOT use box-shadow on the cell button itself,
-   otherwise they override selection/conflict glows. Wrap handles separators. */
-.cell-wrap {
-  position: relative;
-}
-
-.cell-wrap.thick-left::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: color-mix(in oklab, var(--ink) 70%, transparent);
-  pointer-events: none;
-}
-
-.cell-wrap.thick-top::after {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 3px;
-  background: color-mix(in oklab, var(--ink) 70%, transparent);
-  pointer-events: none;
+  border: 2px solid color-mix(in oklab, var(--ink) 70%, transparent);
 }
 </style>

@@ -87,24 +87,24 @@ const cornerSlots = [
   position: relative;
   width: 100%;
   aspect-ratio: 1 / 1;
-  border: 1px solid color-mix(in oklab, var(--ink) 70%, transparent);
+  border-style: solid;
+  border-color: color-mix(in oklab, var(--ink) 70%, transparent);
+  border-width: 1px 0 0 1px; /* draw only top/left borders to avoid per-row gaps */
   background: color-mix(in oklab, var(--panel) 80%, transparent);
   color: var(--bone);
   padding: 0;
   border-radius: 0px;
   cursor: pointer;
-  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .cell:hover {
-    transform: translateY(-1px);
     border-color: color-mix(in oklab, var(--blood) 55%, var(--ink));
   }
 }
 
 .cell.no-hover:hover {
-  transform: none;
   border-color: color-mix(in oklab, var(--ink) 70%, transparent);
 }
 
@@ -112,6 +112,7 @@ const cornerSlots = [
   outline: 2px solid color-mix(in oklab, var(--blood) 70%, white);
   outline-offset: -2px;
   background: color-mix(in oklab, var(--panel) 70%, var(--blood) 10%);
+  z-index: 2;
 }
 
 .cell.related:not(.selected) {
@@ -143,7 +144,14 @@ const cornerSlots = [
   background: color-mix(in oklab, var(--panel) 68%, var(--mist) 10%);
   outline: 2px solid color-mix(in oklab, var(--mist) 45%, transparent);
   outline-offset: -2px;
+  z-index: 1;
 }
+
+/* grid line helpers (from SudokuBoard) */
+.cell.no-top { border-top-width: 0; }
+.cell.no-left { border-left-width: 0; }
+.cell.thick-top { border-top-width: 3px; }
+.cell.thick-left { border-left-width: 3px; }
 
 .cell.given {
   background: color-mix(in oklab, var(--panel) 85%, transparent);
