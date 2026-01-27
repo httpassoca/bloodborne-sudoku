@@ -103,40 +103,20 @@ const difficultiesLocalized = computed(() => {
   return DIFFICULTIES.map((d) => ({ key: d.key, label: t(`diff.${d.key}`) }))
 })
 
-// Mobile: use device keyboard via a hidden input
-const captureEl = ref(null)
+// Mobile: on-screen number pad (sudoku.com style)
 const entryMode = ref('value') // 'value' | 'corner' | 'center'
 
-function isCoarsePointer() {
-  return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches
+const isMobile = ref(false)
+function updateIsMobile() {
+  isMobile.value = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 980px)').matches
 }
+onMounted(() => {
+  updateIsMobile()
+  window.addEventListener('resize', updateIsMobile)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', updateIsMobile))
 
-function focusCapture() {
-  if (!isCoarsePointer()) return
-  // iOS requires the input to be focusable and not display:none
-  captureEl.value?.focus({ preventScroll: true })
-}
-
-function clearCapture() {
-  if (captureEl.value) captureEl.value.value = ''
-}
-
-function handleCaptureInput(e) {
-  const v = String(e?.target?.value || '')
-  if (!v) return
-
-  // take last digit only
-  const last = v[v.length - 1]
-  clearCapture()
-
-  if (last === '0') {
-    clearSelected()
-    return
-  }
-
-  const n = Number(last)
-  if (!Number.isInteger(n) || n < 1 || n > 9) return
-
+function mobilePress(n) {
   if (entryMode.value === 'corner') handleNumber(n, 'corner', 'user')
   else if (entryMode.value === 'center') handleNumber(n, 'center', 'user')
   else handleNumber(n, 'value', 'user')
@@ -248,18 +228,15 @@ function selectCell({ row, col, mode = 'replace', additive = false }) {
     if (state.multiSelected.has(k)) state.multiSelected.delete(k)
     else state.multiSelected.add(k)
     if (state.multiSelected.size === 0) state.multiSelected = new Set([k])
-    focusCapture()
     return
   }
 
   if (mode === 'extend') {
     state.multiSelected.add(k)
-    focusCapture()
     return
   }
 
   state.multiSelected = new Set([k])
-  focusCapture()
 }
 
 function cellAt(r, c) {
@@ -753,21 +730,6 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
 
 <template>
   <div class="app">
-    <!-- Hidden input to trigger the device keyboard on mobile -->
-    <input
-      ref="captureEl"
-      class="capture"
-      type="tel"
-      inputmode="numeric"
-      autocomplete="off"
-      autocorrect="off"
-      autocapitalize="off"
-      spellcheck="false"
-      pattern="[0-9]*"
-      aria-label="Sudoku input"
-      @input="handleCaptureInput"
-    />
-
     <!-- Victory overlay (dismisses on ANY key or click) -->
     <div class="victory" :class="{ show: state.victoryVisible }" :data-burst="victoryBurst" aria-hidden="true">
       <div class="victory-inner">
@@ -808,13 +770,18 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
             @select="(pos) => selectCell(pos)"
           />
 
-          <!-- Mobile: entry mode toolbar (similar to sudoku.com) -->
-          <div class="mobile-toolbar">
-            <button class="tool" :class="{ on: entryMode === 'value' }" type="button" @click="entryMode = 'value'; focusCapture()">123</button>
-            <button class="tool" :class="{ on: entryMode === 'corner' }" type="button" @click="entryMode = 'corner'; focusCapture()">↖</button>
-            <button class="tool" :class="{ on: entryMode === 'center' }" type="button" @click="entryMode = 'center'; focusCapture()">◎</button>
-            <button class="tool danger" type="button" @click="() => { clearSelected(); focusCapture() }">⌫</button>
-          </div>
+          <!-- Mobile number pad (sudoku.com-ish) -->
+          <section v-if="isMobile" class="pad" aria-label="Number pad">
+            <div class="pad-tools">
+              <button class="tool" :class="{ on: entryMode === 'value' }" type="button" @click="entryMode = 'value'">123</button>
+              <button class="tool" :class="{ on: entryMode === 'corner' }" type="button" @click="entryMode = 'corner'">↖</button>
+              <button class="tool" :class="{ on: entryMode === 'center' }" type="button" @click="entryMode = 'center'">◎</button>
+              <button class="tool danger" type="button" @click="clearSelected">⌫</button>
+            </div>
+            <div class="pad-nums">
+              <button v-for="n in 9" :key="n" class="num" type="button" @click="mobilePress(n)">{{ n }}</button>
+            </div>
+          </section>
 
           <!-- Companion explanation (text) -->
           <section class="companion-explain" aria-label="Companion explanation">
@@ -914,29 +881,37 @@ const themeIcon = computed(() => (theme.value === 'dark' ? '☾' : '☀'))
 </template>
 
 <style scoped>
-.capture {
-  position: fixed;
-  left: 0;
-  bottom: 0;
-  width: 1px;
-  height: 1px;
-  opacity: 0.01;
-  border: 0;
-  padding: 0;
-  font-size: 16px; /* prevent iOS zoom */
-  background: transparent;
+.pad {
+  display: grid;
+  gap: 10px;
 }
 
-.mobile-toolbar {
-  display: none;
-  gap: 8px;
+.pad-tools {
+  display: grid;
   grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
 }
 
-@media (pointer: coarse) {
-  .mobile-toolbar {
-    display: grid;
+.pad-nums {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .pad-nums {
+    grid-template-columns: repeat(3, 1fr);
   }
+}
+
+.num {
+  height: 48px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 86%, transparent);
+  color: var(--bone);
+  font-weight: 900;
+  font-size: 18px;
 }
 
 .tool {
@@ -1072,7 +1047,7 @@ h1 {
 .board-wrap {
   grid-area: board;
   width: 100%;
-  max-width: 560px;
+  max-width: min(560px, 90vw);
   min-width: 0;
   display: grid;
   gap: 10px;
