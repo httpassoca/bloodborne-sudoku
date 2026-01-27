@@ -30,10 +30,16 @@ function isRelated(r, c) {
   const sbc = Math.floor(sc / 3)
   if (br === sbr && bc === sbc) return true
 
-  const selectedVal = props.cells?.[sr]?.[sc]?.value
-  if (selectedVal && props.cells[r][c].value === selectedVal) return true
-
   return false
+}
+
+function isSameNumber(r, c) {
+  const sr = props.selected.row
+  const sc = props.selected.col
+  if (sr === -1 || sc === -1) return false
+  const v = props.cells?.[sr]?.[sc]?.value
+  if (!v) return false
+  return props.cells[r][c].value === v
 }
 
 function gridLineClass(r, c) {
@@ -81,6 +87,7 @@ function decisionFlags(r, c) {
         :flashed="flashKey === `${r},${c}`"
         :decision-flags="decisionFlags(r, c)"
         :related="isRelated(r, c)"
+        :same-number="isSameNumber(r, c)"
         :conflicted="conflicts.has(`${r},${c}`)"
         class="board-cell"
         :class="gridLineClass(r, c)"

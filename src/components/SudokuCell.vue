@@ -8,6 +8,7 @@ const props = defineProps({
   decisionFlags: { type: Object, default: () => ({ decisionFocus: false, decisionRow: false, decisionCol: false, decisionBox: false }) },
   flashed: { type: Boolean, default: false },
   related: { type: Boolean, default: false },
+  sameNumber: { type: Boolean, default: false },
   conflicted: { type: Boolean, default: false },
   row: { type: Number, required: true },
   col: { type: Number, required: true },
@@ -46,6 +47,7 @@ const cornerSlots = [
       selected,
       multi: multi && !selected,
       related,
+      'same-number': sameNumber,
       given: cell.given,
       conflicted,
       highlighted,
@@ -117,6 +119,13 @@ const cornerSlots = [
 
 .cell.related:not(.selected) {
   background: color-mix(in oklab, var(--panel) 70%, var(--blood) 6%);
+}
+
+/* When same number is selected elsewhere, outline instead of background */
+.cell.same-number:not(.selected) {
+  outline: 2px solid color-mix(in oklab, var(--blood) 55%, transparent);
+  outline-offset: -2px;
+  background: color-mix(in oklab, var(--panel) 80%, transparent);
 }
 
 /* Companion decision highlighting (row/col/box overlay tints) */
@@ -233,7 +242,7 @@ const cornerSlots = [
   place-items: center;
   min-height: 0;
   font-size: clamp(8px, 1.2vw, 11px);
-  opacity: 0.95;
+  opacity: 0.65; /* lower */
   color: color-mix(in oklab, var(--bone) 65%, var(--ink));
 }
 
@@ -248,7 +257,7 @@ const cornerSlots = [
   place-items: center;
   padding-top: 2px;
   font-size: clamp(10px, 1.5vw, 14px);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.01em; /* minimal */
   color: color-mix(in oklab, var(--bone) 75%, var(--ink));
 }
 </style>
