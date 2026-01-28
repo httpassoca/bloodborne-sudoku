@@ -1171,7 +1171,7 @@ h1 {
 .main {
   display: grid;
   place-items: start center;
-  width: 100%;
+  width: max-content;
   overflow-x: clip;
 }
 
