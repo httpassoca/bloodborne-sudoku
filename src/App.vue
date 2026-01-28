@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
-import { Volume2, Sun, Moon } from 'lucide-vue-next'
+import { Volume2, Sun, Moon, Pencil, Eraser, Undo2 } from 'lucide-vue-next'
 import SudokuBoard from './components/SudokuBoard.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
@@ -116,6 +116,11 @@ onMounted(() => {
   window.addEventListener('resize', updateIsMobile)
 })
 onBeforeUnmount(() => window.removeEventListener('resize', updateIsMobile))
+
+const isCenterDraft = computed(() => entryMode.value === 'center')
+function toggleCenterDraft() {
+  entryMode.value = entryMode.value === 'center' ? 'value' : 'center'
+}
 
 function mobilePress(n) {
   if (entryMode.value === 'corner') handleNumber(n, 'corner', 'user')
@@ -890,6 +895,7 @@ watch(
           </div>
 
           <button
+            v-if="!isMobile"
             class="icon-btn"
             type="button"
             :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
@@ -897,6 +903,18 @@ watch(
             @click="toggleTheme"
           >
             <component :is="theme === 'dark' ? Sun : Moon" class="vol" aria-hidden="true" />
+          </button>
+
+          <button
+            v-else
+            class="icon-btn draft-toggle"
+            type="button"
+            aria-label="Toggle draft (center marks)"
+            title="Draft (center marks)"
+            @click="toggleCenterDraft"
+          >
+            <Pencil class="vol" aria-hidden="true" />
+            <span v-if="!isCenterDraft" class="draft-badge" aria-hidden="true">OFF</span>
           </button>
         </div>
       </div>
@@ -926,15 +944,30 @@ watch(
             @select="(pos) => selectCell(pos)"
           />
 
-          <!-- Mobile number pad (sudoku.com-ish) -->
+          <!-- Mobile number pad (match screenshot vibe) -->
           <section v-if="isMobile" class="pad" aria-label="Number pad">
-            <div class="pad-tools">
-              <button class="tool" :class="{ on: entryMode === 'value' }" type="button" @click="entryMode = 'value'">123</button>
-              <button class="tool" :class="{ on: entryMode === 'corner' }" type="button" @click="entryMode = 'corner'">↖</button>
-              <button class="tool" :class="{ on: entryMode === 'center' }" type="button" @click="entryMode = 'center'">◎</button>
-              <!-- clear removed -->
+            <div class="pad-tools" aria-label="Pad tools">
+              <button class="pad-icon" type="button" aria-label="Undo" title="Undo" @click="undo">
+                <Undo2 aria-hidden="true" />
+              </button>
+
+              <button class="pad-icon" type="button" aria-label="Erase" title="Erase" @click="clearSelected">
+                <Eraser aria-hidden="true" />
+              </button>
+
+              <button
+                class="pad-icon pad-draft"
+                type="button"
+                aria-label="Draft (center marks)"
+                title="Draft (center marks)"
+                @click="toggleCenterDraft"
+              >
+                <Pencil aria-hidden="true" />
+                <span v-if="!isCenterDraft" class="draft-badge" aria-hidden="true">OFF</span>
+              </button>
             </div>
-            <div class="pad-nums">
+
+            <div class="pad-nums" aria-label="Numbers">
               <button v-for="n in 9" :key="n" class="num" type="button" @click="mobilePress(n)">{{ n }}</button>
             </div>
           </section>
@@ -1025,35 +1058,87 @@ watch(
 <style scoped>
 .pad {
   display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+/* top tool row like the screenshot */
+.pad-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
 }
 
-.pad-tools {
+.pad-icon {
+  width: 44px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: color-mix(in oklab, var(--bone) 78%, var(--mist));
+  cursor: pointer;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  place-items: center;
+  position: relative;
 }
 
+.pad-icon :deep(svg) {
+  width: 22px;
+  height: 22px;
+}
+
+.pad-draft {
+  margin: 0 auto; /* center draft button */
+}
+
+.draft-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--panel) 84%, transparent);
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  color: color-mix(in oklab, var(--bone) 70%, var(--mist));
+}
+
+.pad-icon:hover {
+  color: color-mix(in oklab, var(--bone) 86%, var(--gold));
+}
+
+/* 1..9 in a single row */
 .pad-nums {
   display: grid;
   grid-template-columns: repeat(9, 1fr);
-  gap: 8px;
-}
-
-@media (max-width: 560px) {
-  .pad-nums {
-    grid-template-columns: repeat(3, 1fr);
-  }
+  gap: 6px;
 }
 
 .num {
-  height: 48px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
-  background: color-mix(in oklab, var(--panel) 86%, transparent);
-  color: var(--bone);
+  height: 52px;
+  border: 0;
+  background: transparent;
+  color: color-mix(in oklab, var(--bone) 88%, white);
   font-weight: 900;
-  font-size: 18px;
+  font-size: 28px;
+  font-family: 'Cinzel', ui-serif, Georgia, 'Times New Roman', Times, serif;
+  cursor: pointer;
+}
+
+.num:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 8px;
+  text-decoration-color: var(--gold);
+}
+
+@media (max-width: 560px) {
+  .num {
+    height: 50px;
+    font-size: 26px;
+  }
 }
 
 .tool {
@@ -1600,6 +1685,20 @@ kbd {
       calc(16px + env(safe-area-inset-bottom))
       calc(10px + env(safe-area-inset-left));
     gap: 12px;
+  }
+
+  /* remove header flex container on mobile */
+  .top-row {
+    display: block;
+  }
+
+  .header-actions {
+    margin-top: 10px;
+    justify-content: space-between;
+  }
+
+  .header-actions :deep(.trigger) {
+    min-width: 0;
   }
 
   .hud {
