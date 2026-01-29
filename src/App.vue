@@ -46,6 +46,103 @@ function applyTheme() {
 }
 watch(theme, applyTheme, { immediate: true })
 
+// Persist/restore game state (and user info already stored elsewhere)
+const GAME_KEY = 'bbs_game_v1'
+
+function serializeCell(cell) {
+  return {
+    value: cell.value || 0,
+    given: !!cell.given,
+    cornerNotes: Array.from(cell.cornerNotes || []),
+    centerNotes: Array.from(cell.centerNotes || []),
+  }
+}
+
+function deserializeCell(raw) {
+  const value = Number(raw?.value || 0)
+  const given = !!raw?.given
+  const cell = makeCell(value, given)
+  cell.cornerNotes = new Set(Array.isArray(raw?.cornerNotes) ? raw.cornerNotes : [])
+  cell.centerNotes = new Set(Array.isArray(raw?.centerNotes) ? raw.centerNotes : [])
+  return cell
+}
+
+function serializeGame() {
+  return {
+    v: 1,
+    at: Date.now(),
+    difficultyKey: difficultyKey.value,
+    startedAt: state.startedAt,
+    finished: state.finished,
+    finishedAt: state.finishedAt,
+    errors: state.errors,
+    score: state.score,
+    puzzle: state.puzzle,
+    solution: state.solution,
+    cells: state.cells.map((row) => row.map((c) => serializeCell(c))),
+    selected: state.selected,
+    multiSelected: Array.from(state.multiSelected || []),
+    history: state.history,
+  }
+}
+
+function restoreGame(raw) {
+  if (!raw || raw.v !== 1) return false
+  if (!Array.isArray(raw.cells) || raw.cells.length !== 9) return false
+
+  difficultyKey.value = raw.difficultyKey || difficultyKey.value
+
+  state.startedAt = Number(raw.startedAt || Date.now())
+  state.finished = !!raw.finished
+  state.finishedAt = raw.finishedAt ? Number(raw.finishedAt) : null
+  state.errors = Number(raw.errors || 0)
+  state.score = Number(raw.score || 0)
+
+  state.puzzle = raw.puzzle || null
+  state.solution = raw.solution || null
+
+  state.cells = raw.cells.map((row) => (Array.isArray(row) ? row.map((c) => deserializeCell(c)) : []))
+  // ensure 9x9
+  if (state.cells.length !== 9 || state.cells.some((r) => r.length !== 9)) return false
+
+  state.selected = raw.selected && Number.isInteger(raw.selected.row) ? raw.selected : { row: 0, col: 0 }
+  state.multiSelected = new Set(Array.isArray(raw.multiSelected) ? raw.multiSelected : ['0,0'])
+
+  state.history = Array.isArray(raw.history) ? raw.history : []
+  state.lastCompletes = { rows: new Set(), cols: new Set(), boxes: new Set() }
+  state.flashKey = ''
+
+  // hide overlays on restore
+  state.victoryVisible = false
+  state.companion.running = false
+  state.companion.highlightKey = ''
+  state.companion.message = t('companion.quiet')
+
+  return true
+}
+
+let saveTimer = null
+function scheduleSaveGame() {
+  try {
+    if (saveTimer) window.clearTimeout(saveTimer)
+    saveTimer = window.setTimeout(() => {
+      localStorage.setItem(GAME_KEY, JSON.stringify(serializeGame()))
+    }, 180)
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function loadSavedGame() {
+  try {
+    const raw = localStorage.getItem(GAME_KEY)
+    if (!raw) return false
+    return restoreGame(JSON.parse(raw))
+  } catch {
+    return false
+  }
+}
+
 const state = reactive({
   puzzle: null,
   solution: null,
@@ -184,10 +281,34 @@ function newHunt() {
 
 onMounted(() => {
   loadBestScore()
-  newHunt()
+  const restored = loadSavedGame()
+  if (!restored) newHunt()
 })
 
-watch(difficultyKey, () => newHunt())
+watch(difficultyKey, () => {
+  // changing difficulty is an explicit user action; start fresh
+  newHunt()
+  scheduleSaveGame()
+})
+
+watch(
+  [
+    difficultyKey,
+    () => state.startedAt,
+    () => state.finished,
+    () => state.finishedAt,
+    () => state.errors,
+    () => state.score,
+    () => state.puzzle,
+    () => state.solution,
+    () => state.selected,
+    () => Array.from(state.multiSelected || []),
+    () => state.history,
+    () => state.cells,
+  ],
+  () => scheduleSaveGame(),
+  { deep: true }
+)
 
 const currentGrid = computed(() => state.cells.map((r) => r.map((c) => c.value)))
 const conflicts = computed(() => computeConflicts(currentGrid.value))
@@ -1255,8 +1376,8 @@ h1 {
 
 .main {
   display: grid;
-  place-items: start center;
-  width: max-content;
+  place-items: center;
+  width: 100%;
   overflow-x: clip;
 }
 
@@ -1699,6 +1820,11 @@ kbd {
 
   .header-actions :deep(.trigger) {
     min-width: 0;
+  }
+
+  .board-wrap {
+    max-width: 408px;
+    margin: 0 auto;
   }
 
   .hud {
