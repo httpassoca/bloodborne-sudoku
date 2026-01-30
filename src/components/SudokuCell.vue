@@ -92,6 +92,9 @@ const cornerSlots = [
       flashed,
     }"
     type="button"
+    role="gridcell"
+    :aria-selected="selected"
+    :aria-label="`Row ${row + 1}, Col ${col + 1}`"
     @click="onClick"
     @pointerdown="onPointerDown"
     @pointerenter="onPointerEnter"

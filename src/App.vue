@@ -47,7 +47,8 @@ function applyTheme() {
 watch(theme, applyTheme, { immediate: true })
 
 // Persist/restore game state (and user info already stored elsewhere)
-const GAME_KEY = 'bbs_game_v1'
+const GAME_KEY = 'bbs_game_v2'
+const BUILD_VERSION = '2026-01-30'
 
 function serializeCell(cell) {
   return {
@@ -69,10 +70,12 @@ function deserializeCell(raw) {
 
 function serializeGame() {
   return {
-    v: 1,
+    v: 2,
+    build: BUILD_VERSION,
     at: Date.now(),
     difficultyKey: difficultyKey.value,
     startedAt: state.startedAt,
+    activePlayMs: state.activePlayMs,
     finished: state.finished,
     finishedAt: state.finishedAt,
     errors: state.errors,
@@ -87,12 +90,13 @@ function serializeGame() {
 }
 
 function restoreGame(raw) {
-  if (!raw || raw.v !== 1) return false
+  if (!raw || raw.v !== 2) return false
   if (!Array.isArray(raw.cells) || raw.cells.length !== 9) return false
 
   difficultyKey.value = raw.difficultyKey || difficultyKey.value
 
   state.startedAt = Number(raw.startedAt || Date.now())
+  state.activePlayMs = Number(raw.activePlayMs || 0)
   state.finished = !!raw.finished
   state.finishedAt = raw.finishedAt ? Number(raw.finishedAt) : null
   state.errors = Number(raw.errors || 0)
@@ -137,10 +141,23 @@ function loadSavedGame() {
   try {
     const raw = localStorage.getItem(GAME_KEY)
     if (!raw) return false
-    return restoreGame(JSON.parse(raw))
+    const ok = restoreGame(JSON.parse(raw))
+    // reset tick baseline on restore
+    lastActiveAt = null
+    return ok
   } catch {
     return false
   }
+}
+
+function resetSavedGame() {
+  try {
+    localStorage.removeItem(GAME_KEY)
+  } catch {
+    // ignore
+  }
+  newHunt()
+  scheduleSaveGame()
 }
 
 const state = reactive({
@@ -151,6 +168,7 @@ const state = reactive({
   multiSelected: new Set(['0,0']),
 
   startedAt: Date.now(),
+  activePlayMs: 0,
   errors: 0,
   history: [], // user move history for undo/companion correction
   lastCompletes: { rows: new Set(), cols: new Set(), boxes: new Set() },
@@ -260,6 +278,8 @@ function newHunt() {
   state.multiSelected = new Set(['0,0'])
 
   state.startedAt = Date.now()
+  state.activePlayMs = 0
+  lastActiveAt = null
   state.finished = false
   state.finishedAt = null
 
@@ -317,15 +337,22 @@ const conflicts = computed(() => computeConflicts(currentGrid.value))
 const nowTick = ref(Date.now())
 let timerId = null
 
+let lastActiveAt = null
+
 function stopNowTick() {
   if (timerId) {
     window.clearInterval(timerId)
     timerId = null
   }
+  if (lastActiveAt && !state.finished) {
+    state.activePlayMs += Math.max(0, Date.now() - lastActiveAt)
+  }
+  lastActiveAt = null
 }
 
 function startNowTick() {
   if (timerId) return
+  if (!state.finished) lastActiveAt = Date.now()
   timerId = window.setInterval(() => (nowTick.value = Date.now()), 250)
 }
 
@@ -350,8 +377,13 @@ onBeforeUnmount(() => {
 })
 
 const elapsedSeconds = computed(() => {
-  const end = state.finished ? state.finishedAt || nowTick.value : nowTick.value
-  return Math.max(0, Math.floor((end - state.startedAt) / 1000))
+  if (state.finished) {
+    // if finished, activePlayMs is already finalized in stopNowTick() or on finish
+    return Math.max(0, Math.floor(state.activePlayMs / 1000))
+  }
+
+  const live = lastActiveAt ? Date.now() - lastActiveAt : 0
+  return Math.max(0, Math.floor((state.activePlayMs + Math.max(0, live)) / 1000))
 })
 
 const timeLabel = computed(() => {
@@ -433,6 +465,12 @@ function clearNotes(cell) {
 function tryFinishCheck() {
   if (!state.solution) return
   if (isSolved(currentGrid.value, state.solution)) {
+    // finalize timer
+    if (lastActiveAt) {
+      state.activePlayMs += Math.max(0, Date.now() - lastActiveAt)
+      lastActiveAt = null
+    }
+
     state.finished = true
     state.finishedAt = Date.now()
 
@@ -884,6 +922,13 @@ function onKeyDown(e) {
   if (e.key === 'ArrowLeft') return void (e.preventDefault(), moveSelection(0, -1, e.shiftKey))
   if (e.key === 'ArrowRight') return void (e.preventDefault(), moveSelection(0, 1, e.shiftKey))
 
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    // clear multi-select back to the single active cell
+    state.multiSelected = new Set([keyOf(state.selected.row, state.selected.col)])
+    return
+  }
+
   if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
     e.preventDefault()
     clearSelected()
@@ -925,11 +970,26 @@ onBeforeUnmount(() => {
   stopCompanion()
 })
 
+const conflictList = computed(() => Array.from(conflicts.value).map((k) => {
+  const [r, c] = k.split(',').map((x) => Number(x))
+  return { r, c, k }
+}).filter((x) => Number.isFinite(x.r) && Number.isFinite(x.c)))
+
+const conflictIndex = ref(0)
+
 const statusText = computed(() => {
   if (state.finished) return t('statusSolved', state.score)
   if (conflicts.value.size) return t('statusConflicts', conflicts.value.size)
   return t('statusIdle')
 })
+
+function cycleConflict() {
+  const list = conflictList.value
+  if (!list.length) return
+  conflictIndex.value = (conflictIndex.value + 1) % list.length
+  const { r, c } = list[conflictIndex.value]
+  selectCell({ row: r, col: c, mode: 'replace', source: 'user' })
+}
 
 function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
@@ -1102,6 +1162,10 @@ watch(
             <span class="hud-k">{{ t('best') }}</span>
             <span class="hud-v">{{ state.bestScore }}</span>
           </div>
+          <div v-if="state.multiSelected.size > 1" class="hud-item" aria-label="Selected cells">
+            <span class="hud-k">Sel</span>
+            <span class="hud-v hud-v-mono">{{ state.multiSelected.size }}</span>
+          </div>
         </div>
 
         <div class="hud-group" aria-label="Timer and errors">
@@ -1133,6 +1197,12 @@ watch(
             :class="{ 'error-shake': errorActive }"
             @select="(pos) => selectCell(pos)"
           />
+
+          <div class="mode-ind" aria-label="Entry mode">
+            <span class="mode-chip" :class="{ on: entryMode === 'value' }">Value</span>
+            <span class="mode-chip" :class="{ on: entryMode === 'corner' }">Corner</span>
+            <span class="mode-chip" :class="{ on: entryMode === 'center' }">Center</span>
+          </div>
 
           <!-- Mobile number pad (match screenshot vibe) -->
           <section v-if="isMobile" class="pad" aria-label="Number pad">
@@ -1225,6 +1295,7 @@ watch(
 
             <div class="btn-row">
               <button class="btn danger" type="button" @click="revealSolution">{{ t('reveal') }}</button>
+              <button class="btn ghost" type="button" @click="resetSavedGame">Reset</button>
             </div>
           </div>
 
@@ -1232,10 +1303,16 @@ watch(
             <div class="remaining-row">
               <RemainingNumbers :grid="currentGrid" :title="t('remaining')" :all-text="t('allNumbersPlaced')" />
 
-              <div class="status-inline" aria-label="Status">
+              <button
+                class="status-inline"
+                type="button"
+                :class="{ clickable: conflictList.length }"
+                :title="conflictList.length ? 'Jump to next conflict' : 'Status'"
+                @click="conflictList.length ? cycleConflict() : null"
+              >
                 <div class="sidepanel-title" style="margin:0">{{ t('status') }}</div>
                 <div class="status-text">{{ statusText }}</div>
-              </div>
+              </button>
             </div>
           </div>
 
@@ -1500,6 +1577,28 @@ h1 {
   overflow: hidden;
 }
 
+.mode-ind {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.mode-chip {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 82%, transparent);
+  opacity: 0.7;
+}
+
+.mode-chip.on {
+  opacity: 1;
+  border-color: color-mix(in oklab, var(--gold) 55%, var(--ink));
+}
+
 .sidepanel {
   grid-area: side;
   min-width: 0;
@@ -1623,6 +1722,20 @@ kbd {
   transform-origin: center;
   accent-color: var(--blood);
   background: transparent;
+}
+
+@media (max-width: 560px) {
+  .sound-pop {
+    width: 220px;
+    height: auto;
+    transform: translateX(-50%);
+  }
+
+  .sound-slider {
+    width: 200px;
+    height: 26px;
+    transform: none;
+  }
 }
 
 .companion-head {
@@ -1793,6 +1906,15 @@ kbd {
   border-radius: 12px;
   background: color-mix(in oklab, var(--panel) 86%, transparent);
   border: 1px solid color-mix(in oklab, var(--ink) 50%, transparent);
+  text-align: left;
+}
+
+.status-inline.clickable {
+  cursor: pointer;
+}
+
+.status-inline.clickable:hover {
+  border-color: color-mix(in oklab, var(--gold) 45%, var(--ink));
 }
 
 .status-text {
