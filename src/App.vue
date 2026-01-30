@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
-import { Volume2, Sun, Moon, Pencil, Eraser, Undo2 } from 'lucide-vue-next'
+import { Volume2, Sun, Moon, Pencil, Eraser, Undo2, Clock, AlertOctagon } from 'lucide-vue-next'
 import SudokuBoard from './components/SudokuBoard.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
@@ -1041,9 +1041,19 @@ watch(
       </div>
 
       <div class="hud">
-        <div class="pill"><span class="pill-label">{{ t('score') }}</span><span class="pill-value">{{ state.score || '—' }}</span></div>
-        <div class="pill"><span class="pill-label">{{ t('best') }}</span><span class="pill-value">{{ state.bestScore || '—' }}</span></div>
-        <div class="pill"><span class="pill-label">{{ t('time') }}</span><span class="pill-value">{{ timeLabel }}</span></div>
+        <div class="pill"><span class="pill-label">{{ t('score') }}</span><span class="pill-value">{{ state.score }}</span></div>
+        <div class="pill"><span class="pill-label">{{ t('best') }}</span><span class="pill-value">{{ state.bestScore }}</span></div>
+
+        <div class="pill pill-icon" aria-label="Timer">
+          <Clock class="pill-ico" aria-hidden="true" />
+          <span class="pill-value pill-value-mono">{{ timeLabel }}</span>
+        </div>
+
+        <div class="pill pill-icon" aria-label="Errors">
+          <AlertOctagon class="pill-ico" aria-hidden="true" />
+          <span class="pill-value pill-value-mono">{{ state.errors }}</span>
+        </div>
+
         <div class="pill"><span class="pill-label">{{ t('status') }}</span><span class="pill-value">{{ statusText }}</span></div>
       </div>
     </header>
@@ -1093,6 +1103,40 @@ watch(
             </div>
           </section>
 
+          <!-- Companion (moved below game) -->
+          <section class="sidepanel-section companion-panel" aria-label="Companion">
+            <div class="companion-head">
+              <img class="companion-img" :src="companionImgUrl" alt="Companion" />
+              <div>
+                <div class="sidepanel-title" style="margin:0">{{ t('companionTitle') }}</div>
+                <div class="companion-sub">{{ t('companion.decisionHint') }}</div>
+              </div>
+            </div>
+
+            <div class="btn-row companion-row">
+              <button class="btn" type="button" @click="toggleCompanionKill">
+                {{ state.companion.running ? t('stopCompanion') : t('companionKill') }}
+              </button>
+            </div>
+
+            <div class="speed">
+              <div class="speed-head">
+                <span class="speed-label">{{ t('companionSpeed') }}</span>
+                <span class="speed-value">{{ (state.companion.speedMs / 1000).toFixed(2) }}s</span>
+              </div>
+
+              <select v-model="state.companion.speedPreset" class="speed-select">
+                <option v-for="p in speedPresets" :key="p.key" :value="p.key">{{ p.label }}</option>
+              </select>
+            </div>
+
+            <div class="companion-log" :class="{ active: state.companion.running }">
+              <div class="companion-title">{{ t('companionLog') }}</div>
+              <div class="companion-text">{{ state.companion.message }}</div>
+              <div class="companion-hint">{{ t('companion.decisionHint') }}</div>
+            </div>
+          </section>
+
           <!-- Instructions (not a dropdown): subtle until hover -->
           <section class="instructions" aria-label="Instructions">
             <div class="instructions-title">{{ t('controlsTitle') }}</div>
@@ -1133,39 +1177,7 @@ watch(
             </div>
           </div>
 
-          <div class="sidepanel-section companion-panel">
-
-            <div class="companion-head">
-              <img class="companion-img" :src="companionImgUrl" alt="Companion" />
-              <div>
-                <div class="sidepanel-title" style="margin:0">{{ t('companionTitle') }}</div>
-                <div class="companion-sub">{{ t('companion.decisionHint') }}</div>
-              </div>
-            </div>
-
-            <div class="btn-row companion-row">
-              <button class="btn" type="button" @click="toggleCompanionKill">
-                {{ state.companion.running ? t('stopCompanion') : t('companionKill') }}
-              </button>
-            </div>
-
-            <div class="speed">
-              <div class="speed-head">
-                <span class="speed-label">{{ t('companionSpeed') }}</span>
-                <span class="speed-value">{{ (state.companion.speedMs / 1000).toFixed(2) }}s</span>
-              </div>
-
-              <select v-model="state.companion.speedPreset" class="speed-select">
-                <option v-for="p in speedPresets" :key="p.key" :value="p.key">{{ p.label }}</option>
-              </select>
-            </div>
-
-            <div class="companion-log" :class="{ active: state.companion.running }">
-              <div class="companion-title">{{ t('companionLog') }}</div>
-              <div class="companion-text">{{ state.companion.message }}</div>
-              <div class="companion-hint">{{ t('companion.decisionHint') }}</div>
-            </div>
-          </div>
+          <!-- companion moved below board on purpose -->
         </aside>
       </div>
     </main>
@@ -1349,7 +1361,7 @@ h1 {
 
 .hud {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 10px;
 }
 
@@ -1361,6 +1373,23 @@ h1 {
   border-radius: 12px;
   background: color-mix(in oklab, var(--panel) 86%, transparent);
   border: 1px solid color-mix(in oklab, var(--ink) 50%, transparent);
+}
+
+.pill-icon {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+}
+
+.pill-ico {
+  width: 16px;
+  height: 16px;
+  opacity: 0.85;
+}
+
+.pill-value-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  letter-spacing: 0.04em;
 }
 
 .pill-label {
