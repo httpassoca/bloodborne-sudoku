@@ -313,14 +313,40 @@ watch(
 const currentGrid = computed(() => state.cells.map((r) => r.map((c) => c.value)))
 const conflicts = computed(() => computeConflicts(currentGrid.value))
 
-// realtime timer tick
+// realtime timer tick (only while tab is visible)
 const nowTick = ref(Date.now())
 let timerId = null
-onMounted(() => {
+
+function stopNowTick() {
+  if (timerId) {
+    window.clearInterval(timerId)
+    timerId = null
+  }
+}
+
+function startNowTick() {
+  if (timerId) return
   timerId = window.setInterval(() => (nowTick.value = Date.now()), 250)
+}
+
+function syncNowTickActive() {
+  if (typeof document === 'undefined') return
+  if (document.visibilityState === 'visible') startNowTick()
+  else stopNowTick()
+}
+
+onMounted(() => {
+  syncNowTickActive()
+  document.addEventListener('visibilitychange', syncNowTickActive)
+  window.addEventListener('focus', syncNowTickActive)
+  window.addEventListener('blur', syncNowTickActive)
 })
+
 onBeforeUnmount(() => {
-  if (timerId) window.clearInterval(timerId)
+  stopNowTick()
+  document.removeEventListener('visibilitychange', syncNowTickActive)
+  window.removeEventListener('focus', syncNowTickActive)
+  window.removeEventListener('blur', syncNowTickActive)
 })
 
 const elapsedSeconds = computed(() => {
@@ -1040,21 +1066,28 @@ watch(
         </div>
       </div>
 
-      <div class="hud">
-        <div class="pill"><span class="pill-label">{{ t('score') }}</span><span class="pill-value">{{ state.score }}</span></div>
-        <div class="pill"><span class="pill-label">{{ t('best') }}</span><span class="pill-value">{{ state.bestScore }}</span></div>
-
-        <div class="pill pill-icon" aria-label="Timer">
-          <Clock class="pill-ico" aria-hidden="true" />
-          <span class="pill-value pill-value-mono">{{ timeLabel }}</span>
+      <div class="hud" aria-label="HUD">
+        <div class="hud-group" aria-label="Score">
+          <div class="hud-item">
+            <span class="hud-k">{{ t('score') }}</span>
+            <span class="hud-v">{{ state.score }}</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-k">{{ t('best') }}</span>
+            <span class="hud-v">{{ state.bestScore }}</span>
+          </div>
         </div>
 
-        <div class="pill pill-icon" aria-label="Errors">
-          <AlertOctagon class="pill-ico" aria-hidden="true" />
-          <span class="pill-value pill-value-mono">{{ state.errors }}</span>
+        <div class="hud-group" aria-label="Timer and errors">
+          <div class="hud-item hud-item-icon" aria-label="Timer">
+            <Clock class="hud-ico" aria-hidden="true" />
+            <span class="hud-v hud-v-mono">{{ timeLabel }}</span>
+          </div>
+          <div class="hud-item hud-item-icon" aria-label="Errors">
+            <AlertOctagon class="hud-ico" aria-hidden="true" />
+            <span class="hud-v hud-v-mono">{{ state.errors }}</span>
+          </div>
         </div>
-
-        <div class="pill"><span class="pill-label">{{ t('status') }}</span><span class="pill-value">{{ statusText }}</span></div>
       </div>
     </header>
 
@@ -1173,7 +1206,10 @@ watch(
             <div class="remaining-row">
               <RemainingNumbers :grid="currentGrid" :title="t('remaining')" :all-text="t('allNumbersPlaced')" />
 
-              <!-- moved Time/Status to header -->
+              <div class="status-inline" aria-label="Status">
+                <div class="sidepanel-title" style="margin:0">{{ t('status') }}</div>
+                <div class="status-text">{{ statusText }}</div>
+              </div>
             </div>
           </div>
 
@@ -1361,46 +1397,53 @@ h1 {
 
 .hud {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 
-.pill {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
+.hud-group {
   padding: 10px 12px;
   border-radius: 12px;
   background: color-mix(in oklab, var(--panel) 86%, transparent);
   border: 1px solid color-mix(in oklab, var(--ink) 50%, transparent);
-}
-
-.pill-icon {
-  justify-content: flex-start;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.pill-ico {
-  width: 16px;
-  height: 16px;
-  opacity: 0.85;
+.hud-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
 }
 
-.pill-value-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-  letter-spacing: 0.04em;
+.hud-item-icon {
+  align-items: center;
 }
 
-.pill-label {
+.hud-k {
   opacity: 0.72;
   white-space: nowrap;
 }
 
-.pill-value {
+.hud-v {
   font-weight: 800;
   letter-spacing: 0.06em;
   text-align: right;
+}
+
+.hud-v-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  letter-spacing: 0.04em;
+}
+
+.hud-ico {
+  width: 16px;
+  height: 16px;
+  opacity: 0.85;
 }
 
 .main {
@@ -1715,6 +1758,18 @@ kbd {
   align-items: start;
 }
 
+.status-inline {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--panel) 86%, transparent);
+  border: 1px solid color-mix(in oklab, var(--ink) 50%, transparent);
+}
+
+.status-text {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .mini-hud {
   display: grid;
   gap: 10px;
@@ -1818,12 +1873,18 @@ kbd {
     max-width: 100%;
   }
 
-  .remaining-row { grid-template-columns: 1fr; }
+  .remaining-row {
+    grid-template-columns: 1fr;
+  }
+
+  .status-inline {
+    margin-top: 10px;
+  }
 }
 
 @media (max-width: 980px) {
   .hud {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 }
 
