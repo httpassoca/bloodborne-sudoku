@@ -16,9 +16,42 @@ const props = defineProps({
 
 const emit = defineEmits(['select'])
 
+// drag-to-multi-select with mouse (desktop)
+let dragActive = false
+let dragPointerId = null
+let dragAdditive = false
+
+function stopDrag() {
+  dragActive = false
+  dragPointerId = null
+  dragAdditive = false
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointerup', stopDrag)
+  window.addEventListener('pointercancel', stopDrag)
+  window.addEventListener('blur', stopDrag)
+}
+
 function onClick(e) {
-  // shift-click toggles multi-selection (mobile-friendly)
+  // shift-click toggles multi-selection
   emit('select', { row: props.row, col: props.col, additive: e?.shiftKey })
+}
+
+function onPointerDown(e) {
+  if (!e || e.button !== 0) return
+  dragActive = true
+  dragPointerId = e.pointerId
+  dragAdditive = !!(e.shiftKey || e.ctrlKey || e.metaKey)
+
+  // normal click selects; modifier starts multi-select
+  emit('select', { row: props.row, col: props.col, mode: dragAdditive ? 'extend' : 'replace', additive: dragAdditive })
+}
+
+function onPointerEnter(e) {
+  if (!dragActive) return
+  if (dragPointerId != null && e?.pointerId != null && e.pointerId !== dragPointerId) return
+  emit('select', { row: props.row, col: props.col, mode: 'extend', additive: true })
 }
 
 function hasCorner() {
@@ -60,6 +93,8 @@ const cornerSlots = [
     }"
     type="button"
     @click="onClick"
+    @pointerdown="onPointerDown"
+    @pointerenter="onPointerEnter"
   >
     <div v-if="cell.value" class="value">{{ cell.value }}</div>
 
