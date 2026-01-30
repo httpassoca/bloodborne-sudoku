@@ -97,17 +97,17 @@ const cornerSlots = [
   padding: 0;
   border-radius: 0px;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: background 160ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .cell:hover {
-    border-color: color-mix(in oklab, var(--blood) 55%, var(--ink));
+    background: color-mix(in oklab, var(--panel) 74%, var(--blood) 8%);
   }
 }
 
 .cell.no-hover:hover {
-  border-color: color-mix(in oklab, var(--ink) 70%, transparent);
+  background: color-mix(in oklab, var(--panel) 80%, transparent);
 }
 
 .cell.selected {
