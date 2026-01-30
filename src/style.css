@@ -54,7 +54,7 @@ html, body { min-height: 100%; }
 body {
   margin: 0;
   color: var(--bone);
-  cursor: url('/cursor.cur') 0 0, auto;
+  cursor: url('/cursor.png') 29 18, auto;
   /* Limit gradient sizes so ultrawide screens don't look washed/weird */
   background:
     radial-gradient(900px 600px at 12% 10%, color-mix(in oklab, var(--blood) 22%, transparent), transparent 62%),
