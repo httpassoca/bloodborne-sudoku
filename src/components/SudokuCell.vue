@@ -258,6 +258,17 @@ const cornerSlots = [
   padding-top: 2px;
   font-size: clamp(10px, 1.5vw, 14px);
   letter-spacing: 0.01em; /* minimal */
-  color: color-mix(in oklab, var(--bone) 75%, var(--ink));
+  color: color-mix(in oklab, var(--bone) 82%, white);
+  /* add readability like stroke/shadow */
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.55),
+    0 0 10px rgba(0, 0, 0, 0.35);
+}
+
+@supports (-webkit-text-stroke: 1px black) {
+  .center-notes {
+    -webkit-text-stroke: 0.35px rgba(0, 0, 0, 0.55);
+    paint-order: stroke fill;
+  }
 }
 </style>
