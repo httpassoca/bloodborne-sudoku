@@ -54,7 +54,6 @@ html, body { min-height: 100%; }
 body {
   margin: 0;
   color: var(--bone);
-  cursor: url('/cursor.png') 29 18, auto;
   /* Limit gradient sizes so ultrawide screens don't look washed/weird */
   background:
     radial-gradient(900px 600px at 12% 10%, color-mix(in oklab, var(--blood) 22%, transparent), transparent 62%),
@@ -73,6 +72,34 @@ body {
 }
 
 #app { min-height: 100%; }
+
+/* Custom cursor (desktop only). We hide the system cursor and draw our own,
+   rotating smoothly when hovering interactive elements. */
+@media (hover: hover) and (pointer: fine) {
+  body {
+    cursor: none;
+  }
+
+  .custom-cursor {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 32px;
+    height: 32px;
+    z-index: 999999;
+    pointer-events: none;
+    background: url('/cursor.png') no-repeat;
+    background-size: 32px 32px;
+    transform: translate3d(var(--cx, -100px), var(--cy, -100px), 0) rotate(var(--crot, 0deg));
+    transform-origin: 0 0; /* keep tip fixed */
+    transition: transform 140ms ease;
+    will-change: transform;
+  }
+
+  .custom-cursor.is-hidden {
+    opacity: 0;
+  }
+}
 
 h1, h2, h3 {
   font-family: 'Cinzel', ui-serif, Georgia, 'Times New Roman', Times, serif;

@@ -1210,7 +1210,7 @@ watch(
   border: 0;
   background: transparent;
   color: color-mix(in oklab, var(--bone) 78%, var(--mist));
-  cursor: url('/cursor.png') 29 18, pointer;
+  cursor: pointer;
   display: grid;
   place-items: center;
   position: relative;
@@ -1257,7 +1257,7 @@ watch(
   font-weight: 900;
   font-size: 28px;
   font-family: 'Cinzel', ui-serif, Georgia, 'Times New Roman', Times, serif;
-  cursor: url('/cursor.png') 29 18, pointer;
+  cursor: pointer;
 }
 
 .num:hover {
