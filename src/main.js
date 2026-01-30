@@ -14,7 +14,6 @@ function setupCustomCursor() {
   let x = -100
   let y = -100
   let rot = 0
-  let raf = 0
 
   function isInteractive(target) {
     if (!target) return false
@@ -24,22 +23,17 @@ function setupCustomCursor() {
   }
 
   function render() {
-    raf = 0
     el.style.setProperty('--cx', `${x}px`)
     el.style.setProperty('--cy', `${y}px`)
     el.style.setProperty('--crot', `${rot}deg`)
   }
 
-  function schedule() {
-    if (!raf) raf = requestAnimationFrame(render)
-  }
-
   window.addEventListener('mousemove', (e) => {
     x = e.clientX
     y = e.clientY
-    rot = isInteractive(document.elementFromPoint(e.clientX, e.clientY)) ? 45 : 0
+    rot = isInteractive(e.target) ? 45 : 0
     el.classList.remove('is-hidden')
-    schedule()
+    render()
   })
 
   window.addEventListener('mouseleave', () => {
@@ -51,7 +45,7 @@ function setupCustomCursor() {
     'focusin',
     (e) => {
       rot = isInteractive(e.target) ? 45 : 0
-      schedule()
+      render()
     },
     true
   )
