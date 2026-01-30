@@ -947,15 +947,28 @@ const sound = reactive({
 const soundWrapEl = ref(null)
 const soundBtnEl = ref(null)
 
+function positionSoundPop() {
+  const r = soundBtnEl.value?.getBoundingClientRect()
+  if (!r) return
+  const pad = 10
+  const w = 52 // rotated slider needs less horizontal space
+  const h = 200
+
+  const cx = r.left + r.width / 2
+  const desiredLeft = cx
+  const top = Math.min(window.innerHeight - h - pad, r.bottom + 10)
+
+  // keep it on-screen (sound-pop is translateX(-50%))
+  const minCenter = pad + w / 2
+  const maxCenter = window.innerWidth - pad - w / 2
+  sound.x = Math.max(minCenter, Math.min(maxCenter, desiredLeft))
+  sound.y = Math.max(pad, top)
+}
+
 function toggleSound() {
   sound.open = !sound.open
   if (sound.open) {
-    nextTick(() => {
-      const r = soundBtnEl.value?.getBoundingClientRect()
-      if (!r) return
-      sound.x = r.left + r.width / 2
-      sound.y = r.bottom + 10
-    })
+    nextTick(() => positionSoundPop())
   }
 }
 
@@ -970,8 +983,21 @@ function onDocPointerDown(e) {
   if (!el.contains(e.target)) closeSound()
 }
 
-onMounted(() => document.addEventListener('pointerdown', onDocPointerDown))
-onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointerDown))
+function onResize() {
+  if (sound.open) positionSoundPop()
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', onDocPointerDown)
+  window.addEventListener('resize', onResize)
+  window.addEventListener('scroll', onResize, true)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocPointerDown)
+  window.removeEventListener('resize', onResize)
+  window.removeEventListener('scroll', onResize, true)
+})
 
 
 const companionImgUrl = new URL('./assets/img/companion.png', import.meta.url).href
@@ -1579,15 +1605,19 @@ kbd {
   position: fixed;
   z-index: 2000;
   transform: translateX(-50%);
+  width: 52px;
+  height: 200px;
   padding: 10px 10px;
   border-radius: 14px;
   border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
   background: color-mix(in oklab, var(--panel) 88%, black);
   box-shadow: 0 22px 80px rgba(0, 0, 0, 0.65);
+  display: grid;
+  place-items: center;
 }
 
 .sound-slider {
-  width: 170px;
+  width: 180px; /* becomes vertical after rotate */
   height: 26px;
   transform: rotate(-90deg);
   transform-origin: center;
@@ -1885,6 +1915,13 @@ kbd {
 @media (max-width: 980px) {
   .hud {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 450px) {
+  .board-wrap {
+    max-width: 320px;
+    margin: 0 auto;
   }
 }
 
