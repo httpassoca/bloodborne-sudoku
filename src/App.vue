@@ -5,6 +5,7 @@ import SudokuBoard from './components/SudokuBoard.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
 import Tooltip from './components/Tooltip.vue'
+import Accordion from './components/Accordion.vue'
 import { DIFFICULTIES, computeConflicts, generatePuzzle, isSolved } from './lib/sudoku'
 import { nextLogicalMove } from './lib/logicSolver'
 import { makeClientId, makeRoomCode, makeSupabase, normalizeName } from './lib/multiplayer'
@@ -28,6 +29,11 @@ const difficultyKey = ref('easy')
 // Multiplayer (Supabase Realtime)
 const mpEnabled = ref(true)
 const mpMode = ref('coop') // 'coop' | 'versus'
+const mpModeOptions = [
+  { key: 'coop', label: 'Co-op (same board)' },
+  { key: 'versus', label: 'Versus (race)' },
+]
+const mpUiOpen = ref(true)
 const mpRoom = ref('')
 const mpName = ref(localStorage.getItem('bbs_name') || 'Hunter')
 watch(mpName, () => localStorage.setItem('bbs_name', mpName.value), { immediate: true })
@@ -225,6 +231,10 @@ async function mpConnect(room, mode) {
   const { error } = await ch.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       mpConnected.value = true
+      // multiplayer: disable companion
+      if (state.companion.running) stopCompanion()
+      state.companion.running = false
+
       ch.track({ name: normalizeName(mpName.value), color: mpColor.value, sel: keyOf(state.selected.row, state.selected.col), joinedAt: Date.now() })
       mpBroadcast({ type: 'hello', by: mpClientId, name: normalizeName(mpName.value), mode: mpMode.value, at: Date.now() })
       if (mpMode.value === 'coop') {
@@ -1241,6 +1251,8 @@ function companionCorrectErrorsStep() {
 }
 
 function toggleCompanionKill() {
+  if (mpIsActive()) return
+
   if (state.companion.running) {
     stopCompanion()
     return
@@ -1643,7 +1655,7 @@ watch(
           </section>
 
           <!-- Companion (moved below game) -->
-          <section class="sidepanel-section companion-panel" aria-label="Companion">
+          <section class="companion-panel instructions" aria-label="Companion">
             <div class="companion-head">
               <img class="companion-img" :src="companionImgUrl" alt="Companion" />
               <div>
@@ -1653,8 +1665,8 @@ watch(
             </div>
 
             <div class="btn-row companion-row">
-              <button class="btn" type="button" @click="toggleCompanionKill">
-                {{ state.companion.running ? t('stopCompanion') : t('companionKill') }}
+              <button class="btn" type="button" @click="toggleCompanionKill" disabled aria-disabled="true">
+                {{ t('companionKill') }}
               </button>
             </div>
 
@@ -1691,9 +1703,7 @@ watch(
         </section>
 
         <aside class="sidepanel">
-          <div class="sidepanel-section">
-            <div class="sidepanel-title">Multiplayer</div>
-
+          <Accordion v-model="mpUiOpen" title="Multiplayer">
             <div class="setup-row">
               <label class="field">
                 <span class="field-label">Name</span>
@@ -1729,13 +1739,10 @@ watch(
                 </div>
               </label>
 
-              <label class="field">
+              <div class="field">
                 <span class="field-label">Mode</span>
-                <select v-model="mpMode" class="speed-select">
-                  <option value="coop">Co-op (same board)</option>
-                  <option value="versus">Versus (race)</option>
-                </select>
-              </label>
+                <CustomSelect v-model="mpMode" :options="mpModeOptions" label="" />
+              </div>
 
               <div class="btn-row" style="grid-template-columns: 1fr 1fr">
                 <button class="btn" type="button" @click="mpConnect(makeRoomCode(), mpMode)">Create</button>
@@ -1759,7 +1766,7 @@ watch(
                 <div><b>Players:</b> {{ mpPlayers.length }}</div>
               </div>
             </div>
-          </div>
+          </Accordion>
 
           <div class="sidepanel-section">
             <div class="sidepanel-title">{{ t('huntSetup') }}</div>
