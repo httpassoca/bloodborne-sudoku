@@ -383,22 +383,20 @@ function startNowTick() {
 
 function syncNowTickActive() {
   if (typeof document === 'undefined') return
+  // Do NOT gate on focus/blur: some browsers load unfocused and timer would stay at 0.
   if (document.visibilityState === 'visible') startNowTick()
   else stopNowTick()
 }
 
 onMounted(() => {
+  // Start immediately if visible.
   syncNowTickActive()
   document.addEventListener('visibilitychange', syncNowTickActive)
-  window.addEventListener('focus', syncNowTickActive)
-  window.addEventListener('blur', syncNowTickActive)
 })
 
 onBeforeUnmount(() => {
   stopNowTick()
   document.removeEventListener('visibilitychange', syncNowTickActive)
-  window.removeEventListener('focus', syncNowTickActive)
-  window.removeEventListener('blur', syncNowTickActive)
 })
 
 const elapsedSeconds = computed(() => {
@@ -1773,6 +1771,7 @@ h1 {
   border-radius: 999px;
   border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
   background: color-mix(in oklab, var(--panel) 82%, transparent);
+  color: color-mix(in oklab, var(--bone) 80%, var(--mist));
   opacity: 0.7;
 }
 
@@ -2091,6 +2090,7 @@ kbd {
   background: color-mix(in oklab, var(--panel) 86%, transparent);
   border: 1px solid color-mix(in oklab, var(--ink) 50%, transparent);
   text-align: left;
+  color: var(--bone);
 }
 
 .status-inline.clickable {
