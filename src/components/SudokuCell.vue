@@ -10,6 +10,7 @@ const props = defineProps({
   related: { type: Boolean, default: false },
   sameNumber: { type: Boolean, default: false },
   conflicted: { type: Boolean, default: false },
+  others: { type: Array, default: () => [] }, // [{color,label}]
   row: { type: Number, required: true },
   col: { type: Number, required: true },
 })
@@ -100,6 +101,17 @@ const cornerSlots = [
     @pointerdown="onPointerDown"
     @pointerenter="onPointerEnter"
   >
+    <div v-if="props.others?.length" class="others" aria-hidden="true">
+      <span
+        v-for="(o, i) in props.others.slice(0, 2)"
+        :key="i"
+        class="other-dot"
+        :style="{ '--oc': o.color }"
+      >
+        {{ o.label }}
+      </span>
+    </div>
+
     <div v-if="cell.value" class="value">{{ cell.value }}</div>
 
     <div v-else class="notes">
@@ -136,7 +148,33 @@ const cornerSlots = [
   padding: 0;
   border-radius: 0px;
   cursor: pointer;
-  transition: background 160ms ease;
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+
+.cell:has(.other-dot) {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--mist) 35%, transparent) inset;
+}
+
+.others {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: flex;
+  gap: 6px;
+  z-index: 3;
+}
+
+.other-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 900;
+  background: color-mix(in oklab, var(--oc) 72%, white);
+  color: rgba(10, 10, 10, 0.85);
+  border: 1px solid color-mix(in oklab, var(--oc) 70%, black);
 }
 
 @media (hover: hover) and (pointer: fine) {

@@ -11,6 +11,7 @@ const props = defineProps({
   highlightKey: { type: String, default: '' },
   decision: { type: Object, default: () => ({ r: -1, c: -1, n: 0, kind: '' }) },
   flashKey: { type: String, default: '' },
+  otherSelections: { type: Object, default: () => new Map() },
 })
 
 const emit = defineEmits(['select'])
@@ -91,6 +92,7 @@ function decisionFlags(r, c) {
         :related="isRelated(r, c)"
         :same-number="isSameNumber(r, c)"
         :conflicted="conflicts.has(`${r},${c}`)"
+        :others="otherSelections.get(`${r},${c}`) || []"
         class="board-cell"
         :class="gridLineClass(r, c)"
         @select="onSelect"

@@ -33,11 +33,51 @@ const mpName = ref(localStorage.getItem('bbs_name') || 'Hunter')
 watch(mpName, () => localStorage.setItem('bbs_name', mpName.value), { immediate: true })
 
 const mpClientId = makeClientId()
+
+const PASTEL_COLORS = [
+  { key: 'rose', label: 'Rose', value: '#f6a6b2' },
+  { key: 'peach', label: 'Peach', value: '#f7c59f' },
+  { key: 'lemon', label: 'Lemon', value: '#f6e58d' },
+  { key: 'mint', label: 'Mint', value: '#b8f2e6' },
+  { key: 'sky', label: 'Sky', value: '#a0c4ff' },
+  { key: 'lilac', label: 'Lilac', value: '#cdb4db' },
+]
+
+function randomPastel() {
+  return PASTEL_COLORS[Math.floor(Math.random() * PASTEL_COLORS.length)].value
+}
+
+const mpColor = ref(localStorage.getItem('bbs_mp_color') || randomPastel())
+watch(mpColor, () => localStorage.setItem('bbs_mp_color', mpColor.value), { immediate: true })
+
 let supabase = null
 let mpChannel = null
 const mpConnected = ref(false)
 const mpPlayers = ref([])
 const mpError = ref('')
+
+function initials(name) {
+  const t = String(name || '').trim()
+  if (!t) return '?'
+  const parts = t.split(/\s+/).filter(Boolean)
+  const a = parts[0]?.[0] || ''
+  const b = parts.length > 1 ? parts[parts.length - 1]?.[0] : ''
+  return (a + b).toUpperCase().slice(0, 2) || '?'
+}
+
+const otherSelections = computed(() => {
+  // map cellKey -> [{ color, label }]
+  const map = new Map()
+  for (const p of mpPlayers.value || []) {
+    if (!p || p.id === mpClientId) continue
+    const sel = p.sel
+    if (!sel) continue
+    const arr = map.get(sel) || []
+    arr.push({ color: p.color || '#b8f2e6', label: initials(p.name) })
+    map.set(sel, arr)
+  }
+  return map
+})
 
 function mpIsActive() {
   return mpEnabled.value && mpConnected.value && mpChannel && mpRoom.value
@@ -176,7 +216,7 @@ async function mpConnect(room, mode) {
   const { error } = await ch.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       mpConnected.value = true
-      ch.track({ name: normalizeName(mpName.value), joinedAt: Date.now() })
+      ch.track({ name: normalizeName(mpName.value), color: mpColor.value, sel: keyOf(state.selected.row, state.selected.col), joinedAt: Date.now() })
       mpBroadcast({ type: 'hello', by: mpClientId, name: normalizeName(mpName.value), mode: mpMode.value, at: Date.now() })
       if (mpMode.value === 'coop') {
         // ask for state; if none replies, keep local
@@ -613,6 +653,11 @@ function selectCell({ row, col, mode = 'replace', additive = false, source = 'us
   state.selected.col = c
 
   const k = keyOf(r, c)
+
+  if (source === 'user' && mpIsActive()) {
+    mpChannel.track({ name: normalizeName(mpName.value), color: mpColor.value, sel: k, joinedAt: Date.now() })
+  }
+
   if (mode === 'toggle') {
     if (state.multiSelected.has(k)) state.multiSelected.delete(k)
     else state.multiSelected.add(k)
@@ -1548,6 +1593,7 @@ watch(
             :highlight-key="state.companion.highlightKey"
             :decision="state.companion.decision"
             :flash-key="state.flashKey"
+            :other-selections="otherSelections"
             :class="{ 'error-shake': errorActive }"
             @select="(pos) => selectCell(pos)"
           />
@@ -1643,6 +1689,13 @@ watch(
               <label class="field">
                 <span class="field-label">Name</span>
                 <input v-model="mpName" class="text" type="text" autocomplete="nickname" />
+              </label>
+
+              <label class="field">
+                <span class="field-label">Color</span>
+                <select v-model="mpColor" class="speed-select">
+                  <option v-for="c in PASTEL_COLORS" :key="c.key" :value="c.value">{{ c.label }}</option>
+                </select>
               </label>
 
               <label class="field">
