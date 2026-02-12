@@ -387,12 +387,15 @@ onBeforeUnmount(() => {
 })
 
 const elapsedSeconds = computed(() => {
+  // depend on nowTick so the UI updates while active
+  const now = nowTick.value
+
   if (state.finished) {
     // if finished, activePlayMs is already finalized in stopNowTick() or on finish
     return Math.max(0, Math.floor(state.activePlayMs / 1000))
   }
 
-  const live = lastActiveAt ? Date.now() - lastActiveAt : 0
+  const live = lastActiveAt ? now - lastActiveAt : 0
   return Math.max(0, Math.floor((state.activePlayMs + Math.max(0, live)) / 1000))
 })
 
