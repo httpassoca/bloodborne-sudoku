@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
-import { Volume2, Sun, Moon, Pencil, Eraser, Undo2, Clock, AlertOctagon } from 'lucide-vue-next'
+import { Volume2, Sun, Moon, Pencil, Eraser, Undo2, Clock, AlertOctagon, Palette } from 'lucide-vue-next'
 import SudokuBoard from './components/SudokuBoard.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
@@ -49,6 +49,15 @@ function randomPastel() {
 
 const mpColor = ref(localStorage.getItem('bbs_mp_color') || randomPastel())
 watch(mpColor, () => localStorage.setItem('bbs_mp_color', mpColor.value), { immediate: true })
+
+const mpColorOpen = ref(false)
+function setMpColor(c) {
+  mpColor.value = c
+  mpColorOpen.value = false
+  if (mpIsActive()) {
+    mpChannel.track({ name: normalizeName(mpName.value), color: mpColor.value, sel: keyOf(state.selected.row, state.selected.col), joinedAt: Date.now() })
+  }
+}
 
 let supabase = null
 let mpChannel = null
@@ -1688,14 +1697,36 @@ watch(
             <div class="setup-row">
               <label class="field">
                 <span class="field-label">Name</span>
-                <input v-model="mpName" class="text" type="text" autocomplete="nickname" />
-              </label>
+                <div class="name-row">
+                  <input v-model="mpName" class="text" type="text" autocomplete="nickname" />
 
-              <label class="field">
-                <span class="field-label">Color</span>
-                <select v-model="mpColor" class="speed-select">
-                  <option v-for="c in PASTEL_COLORS" :key="c.key" :value="c.value">{{ c.label }}</option>
-                </select>
+                  <div class="color-wrap">
+                    <Tooltip text="Pick color" placement="bottom">
+                      <button
+                        class="icon-btn color-btn"
+                        type="button"
+                        aria-label="Pick multiplayer color"
+                        @click="mpColorOpen = !mpColorOpen"
+                      >
+                        <span class="color-dot" :style="{ '--c': mpColor }" aria-hidden="true"></span>
+                        <Palette class="vol" aria-hidden="true" />
+                      </button>
+                    </Tooltip>
+
+                    <div v-if="mpColorOpen" class="color-pop" role="dialog" aria-label="Choose color">
+                      <button
+                        v-for="c in PASTEL_COLORS"
+                        :key="c.key"
+                        class="swatch"
+                        type="button"
+                        :aria-label="c.label"
+                        @click="setMpColor(c.value)"
+                      >
+                        <span class="swatch-in" :style="{ '--c': c.value }" aria-hidden="true"></span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </label>
 
               <label class="field">
@@ -2261,6 +2292,81 @@ kbd {
 .text:focus-visible {
   outline: 2px solid color-mix(in oklab, var(--blood) 60%, white);
   outline-offset: 2px;
+}
+
+.name-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.color-wrap {
+  position: relative;
+  display: grid;
+}
+
+.color-btn {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+}
+
+.color-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--c);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--panel) 80%, transparent);
+  transform: translate(14px, -14px);
+}
+
+.color-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 50;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 90%, black);
+  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.65);
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  gap: 10px;
+}
+
+.swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 120ms ease, border-color 140ms ease;
+}
+
+.swatch:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--gold) 45%, var(--ink));
+}
+
+.swatch:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--blood) 60%, white);
+  outline-offset: 2px;
+}
+
+.swatch-in {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--c);
+  border: 1px solid color-mix(in oklab, var(--c) 70%, black);
 }
 
 .join-row {
