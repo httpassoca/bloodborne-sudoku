@@ -47,8 +47,8 @@ function applyTheme() {
 watch(theme, applyTheme, { immediate: true })
 
 // Persist/restore game state (and user info already stored elsewhere)
-const GAME_KEY = 'bbs_game_v2'
-const BUILD_VERSION = '2026-01-30'
+const GAME_KEY = 'bbs_game_v3'
+const BUILD_VERSION = '2026-02-12'
 
 function serializeCell(cell) {
   return {
@@ -69,8 +69,13 @@ function deserializeCell(raw) {
 }
 
 function serializeGame() {
+  // limit stack sizes to keep storage small
+  const UNDO_MAX = 250
+  const undoStack = Array.isArray(state.undoStack) ? state.undoStack.slice(-UNDO_MAX) : []
+  const redoStack = Array.isArray(state.redoStack) ? state.redoStack.slice(-UNDO_MAX) : []
+
   return {
-    v: 2,
+    v: 3,
     build: BUILD_VERSION,
     at: Date.now(),
     difficultyKey: difficultyKey.value,
@@ -85,12 +90,13 @@ function serializeGame() {
     cells: state.cells.map((row) => row.map((c) => serializeCell(c))),
     selected: state.selected,
     multiSelected: Array.from(state.multiSelected || []),
-    history: state.history,
+    undoStack,
+    redoStack,
   }
 }
 
 function restoreGame(raw) {
-  if (!raw || raw.v !== 2) return false
+  if (!raw || raw.v !== 3) return false
   if (!Array.isArray(raw.cells) || raw.cells.length !== 9) return false
 
   difficultyKey.value = raw.difficultyKey || difficultyKey.value
@@ -112,7 +118,8 @@ function restoreGame(raw) {
   state.selected = raw.selected && Number.isInteger(raw.selected.row) ? raw.selected : { row: 0, col: 0 }
   state.multiSelected = new Set(Array.isArray(raw.multiSelected) ? raw.multiSelected : ['0,0'])
 
-  state.history = Array.isArray(raw.history) ? raw.history : []
+  state.undoStack = Array.isArray(raw.undoStack) ? raw.undoStack : []
+  state.redoStack = Array.isArray(raw.redoStack) ? raw.redoStack : []
   state.lastCompletes = { rows: new Set(), cols: new Set(), boxes: new Set() }
   state.flashKey = ''
 
@@ -170,7 +177,8 @@ const state = reactive({
   startedAt: Date.now(),
   activePlayMs: 0,
   errors: 0,
-  history: [], // user move history for undo/companion correction
+  undoStack: [], // user move history for undo/companion correction
+  redoStack: [],
   lastCompletes: { rows: new Set(), cols: new Set(), boxes: new Set() },
   flashKey: '',
 
@@ -291,7 +299,8 @@ function newHunt() {
   state.companion.message = t('companion.quiet')
 
   state.errors = 0
-  state.history = []
+  state.undoStack = []
+  state.redoStack = []
   state.lastCompletes = { rows: new Set(), cols: new Set(), boxes: new Set() }
   state.flashKey = ''
   completeSfxCount = 0
@@ -323,7 +332,8 @@ watch(
     () => state.solution,
     () => state.selected,
     () => Array.from(state.multiSelected || []),
-    () => state.history,
+    () => state.undoStack,
+    () => state.redoStack,
     () => state.cells,
   ],
   () => scheduleSaveGame(),
@@ -526,19 +536,54 @@ async function playVictorySfx() {
   }
 }
 
-function removeDraftFromRowCol(r, c, n) {
-  for (let i = 0; i < 9; i++) {
-    const a = state.cells[r][i]
-    const b = state.cells[i][c]
-    if (a && !a.given) {
-      a.cornerNotes.delete(n)
-      a.centerNotes.delete(n)
-    }
-    if (b && !b.given) {
-      b.cornerNotes.delete(n)
-      b.centerNotes.delete(n)
+function snapshotNotes(cell) {
+  return {
+    corner: Array.from(cell.cornerNotes || []),
+    center: Array.from(cell.centerNotes || []),
+  }
+}
+
+function applyNotes(cell, snap) {
+  cell.cornerNotes = new Set(Array.isArray(snap?.corner) ? snap.corner : [])
+  cell.centerNotes = new Set(Array.isArray(snap?.center) ? snap.center : [])
+}
+
+function removeDraftFromPeers(r, c, n) {
+  // removes a placed number from drafts in same row, col, and 3x3 box.
+  // returns list of changes so undo/redo can restore.
+  const changes = []
+  const seen = new Set()
+
+  function maybeRemove(rr, cc) {
+    const key = `${rr},${cc}`
+    if (seen.has(key)) return
+    seen.add(key)
+    const cell = state.cells[rr]?.[cc]
+    if (!cell || cell.given) return
+
+    const beforeNotes = snapshotNotes(cell)
+    cell.cornerNotes.delete(n)
+    cell.centerNotes.delete(n)
+    const afterNotes = snapshotNotes(cell)
+    if (beforeNotes.corner.length !== afterNotes.corner.length || beforeNotes.center.length !== afterNotes.center.length) {
+      changes.push({ r: rr, c: cc, beforeNotes, afterNotes })
     }
   }
+
+  for (let i = 0; i < 9; i++) {
+    maybeRemove(r, i)
+    maybeRemove(i, c)
+  }
+
+  const br = Math.floor(r / 3) * 3
+  const bc = Math.floor(c / 3) * 3
+  for (let rr = br; rr < br + 3; rr++) {
+    for (let cc = bc; cc < bc + 3; cc++) {
+      maybeRemove(rr, cc)
+    }
+  }
+
+  return changes
 }
 
 function boxIndex(r, c) {
@@ -620,6 +665,54 @@ function flashCell(r, c) {
   })
 }
 
+function pushMove(move) {
+  state.undoStack.push(move)
+  state.redoStack = []
+}
+
+function applyMove(move, dir) {
+  const isUndo = dir === 'undo'
+  for (const ch of move.changes || []) {
+    const cell = state.cells[ch.r]?.[ch.c]
+    if (!cell || cell.given) continue
+
+    if ('beforeValue' in ch && 'afterValue' in ch) {
+      cell.value = isUndo ? ch.beforeValue : ch.afterValue
+    }
+
+    if (ch.beforeNotes || ch.afterNotes) {
+      applyNotes(cell, isUndo ? ch.beforeNotes : ch.afterNotes)
+    }
+  }
+}
+
+function undo() {
+  if (state.finished) return
+  const m = state.undoStack.pop()
+  if (!m) return
+  applyMove(m, 'undo')
+  state.redoStack.push(m)
+  if (m.primary) {
+    selectCell({ row: m.primary.r, col: m.primary.c, mode: 'replace', source: 'user' })
+    flashCell(m.primary.r, m.primary.c)
+  }
+  checkCompletesAndSound()
+}
+
+function redo() {
+  if (state.finished) return
+  const m = state.redoStack.pop()
+  if (!m) return
+  applyMove(m, 'redo')
+  state.undoStack.push(m)
+  if (m.primary) {
+    selectCell({ row: m.primary.r, col: m.primary.c, mode: 'replace', source: 'user' })
+    flashCell(m.primary.r, m.primary.c)
+  }
+  checkCompletesAndSound()
+  tryFinishCheck()
+}
+
 function handleNumber(n, mode, source = 'user') {
   if (state.finished) return
   if (source === 'user') {
@@ -630,9 +723,17 @@ function handleNumber(n, mode, source = 'user') {
   // Drafting can apply to multiple selected cells.
   if (mode === 'corner' || mode === 'center') {
     const list = iterSelectedCells()
-    for (const { cell } of list) {
+    const changes = []
+    for (const { r, c, cell } of list) {
       if (!cell || cell.given) continue
+      const beforeNotes = snapshotNotes(cell)
       toggleNote(mode === 'corner' ? cell.cornerNotes : cell.centerNotes, n)
+      const afterNotes = snapshotNotes(cell)
+      changes.push({ r, c, beforeNotes, afterNotes })
+    }
+
+    if (source === 'user' && changes.length) {
+      pushMove({ kind: 'notes', at: Date.now(), primary: { r: state.selected.row, c: state.selected.col }, changes })
     }
     return
   }
@@ -643,19 +744,24 @@ function handleNumber(n, mode, source = 'user') {
 
   const r = state.selected.row
   const c = state.selected.col
-  const prev = cell.value
-  const next = prev === n ? 0 : n
+  const beforeValue = cell.value
+  const beforeNotes = snapshotNotes(cell)
 
-  cell.value = next
+  const afterValue = beforeValue === n ? 0 : n
+
+  cell.value = afterValue
   clearNotes(cell)
 
-  if (next) {
-    removeDraftFromRowCol(r, c, next)
+  const changes = [{ r, c, beforeValue, afterValue, beforeNotes, afterNotes: snapshotNotes(cell) }]
+
+  if (afterValue) {
+    const peerChanges = removeDraftFromPeers(r, c, afterValue)
+    for (const ch of peerChanges) changes.push(ch)
   }
 
   if (source === 'user') {
-    state.history.push({ r, c, prev, next, at: Date.now() })
-    if (next && state.solution && next !== state.solution[r][c]) {
+    pushMove({ kind: 'value', at: Date.now(), primary: { r, c }, changes })
+    if (afterValue && state.solution && afterValue !== state.solution[r][c]) {
       state.errors += 1
       flashCell(r, c)
     }
@@ -670,13 +776,21 @@ function handleNumber(n, mode, source = 'user') {
   })
 }
 
-function clearSelected() {
+function clearSelected(source = 'user') {
   if (state.finished) return
   const list = iterSelectedCells()
-  for (const { cell } of list) {
+  const changes = []
+  for (const { r, c, cell } of list) {
     if (!cell || cell.given) continue
+    const beforeValue = cell.value
+    const beforeNotes = snapshotNotes(cell)
     if (cell.value) cell.value = 0
     clearNotes(cell)
+    changes.push({ r, c, beforeValue, afterValue: cell.value, beforeNotes, afterNotes: snapshotNotes(cell) })
+  }
+
+  if (source === 'user' && changes.length) {
+    pushMove({ kind: 'clear', at: Date.now(), primary: { r: state.selected.row, c: state.selected.col }, changes })
   }
 }
 
@@ -744,7 +858,7 @@ function applyStep(r, c, n) {
   if (!cell || cell.given || state.finished) return false
   cell.value = n
   clearNotes(cell)
-  if (n) removeDraftFromRowCol(r, c, n)
+  if (n) removeDraftFromPeers(r, c, n)
   checkCompletesAndSound()
   return true
 }
@@ -833,24 +947,25 @@ function hasUserErrors() {
   return false
 }
 
-function undoLastUserMove() {
-  const m = state.history.pop()
-  if (!m) return false
-  const cell = cellAt(m.r, m.c)
-  if (!cell || cell.given) return false
-  cell.value = m.prev
-  // keep drafts, but flash for explanation
-  flashCell(m.r, m.c)
-  selectCell({ row: m.r, col: m.c, mode: 'replace', source: 'companion' })
-  checkCompletesAndSound()
-  return true
-}
-
-function undo() {
-  if (state.finished) return
-  const ok = undoLastUserMove()
-  if (!ok) return
-  // note: errors counter is "mistakes made" and is not decremented on undo
+function undoLastUserValueMove() {
+  // Companion only cares about reverting value placements.
+  let safety = 400
+  while (safety-- > 0) {
+    const m = state.undoStack.pop()
+    if (!m) return false
+    applyMove(m, 'undo')
+    // don't push to redo stack for companion; it is an auto-correction
+    if (m.kind === 'value' || m.kind === 'clear') {
+      if (m.primary) {
+        flashCell(m.primary.r, m.primary.c)
+        selectCell({ row: m.primary.r, col: m.primary.c, mode: 'replace', source: 'companion' })
+      }
+      checkCompletesAndSound()
+      return true
+    }
+    // if it was only notes, keep rewinding silently
+  }
+  return false
 }
 
 function companionCorrectErrorsStep() {
@@ -859,7 +974,7 @@ function companionCorrectErrorsStep() {
   // Undo moves until board has no incorrect values.
   let safety = 300
   while (hasUserErrors() && safety-- > 0) {
-    const ok = undoLastUserMove()
+    const ok = undoLastUserValueMove()
     if (!ok) break
     state.companion.message = t('companion.reverting')
     return true
@@ -906,6 +1021,13 @@ function onKeyDown(e) {
 
   const tag = (e.target?.tagName || '').toLowerCase()
   if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'option') return
+
+  // Ctrl+Shift+Z / Cmd+Shift+Z => redo
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+    e.preventDefault()
+    redo()
+    return
+  }
 
   // Ctrl+Z / Cmd+Z => undo
   if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
