@@ -4,6 +4,7 @@ import { Volume2, Sun, Moon, Pencil, Eraser, Undo2, Clock, AlertOctagon } from '
 import SudokuBoard from './components/SudokuBoard.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
+import Tooltip from './components/Tooltip.vue'
 import { DIFFICULTIES, computeConflicts, generatePuzzle, isSolved } from './lib/sudoku'
 import { nextLogicalMove } from './lib/logicSolver'
 import { LANGS, t as tt } from './i18n'
@@ -230,6 +231,16 @@ const difficultiesLocalized = computed(() => {
 // Mobile: on-screen number pad (sudoku.com style)
 const entryMode = ref('value') // 'value' | 'corner' | 'center'
 
+// Keyboard modifiers (desktop): reflect mode indicator when Shift/Ctrl/Meta is held
+const heldShift = ref(false)
+const heldCtrlMeta = ref(false)
+
+const effectiveEntryMode = computed(() => {
+  if (heldCtrlMeta.value) return 'center'
+  if (heldShift.value) return 'corner'
+  return entryMode.value
+})
+
 const isMobile = ref(false)
 function updateIsMobile() {
   isMobile.value = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 980px)').matches
@@ -246,8 +257,9 @@ function toggleCenterDraft() {
 }
 
 function mobilePress(n) {
-  if (entryMode.value === 'corner') handleNumber(n, 'corner', 'user')
-  else if (entryMode.value === 'center') handleNumber(n, 'center', 'user')
+  const m = effectiveEntryMode.value
+  if (m === 'corner') handleNumber(n, 'corner', 'user')
+  else if (m === 'center') handleNumber(n, 'center', 'user')
   else handleNumber(n, 'value', 'user')
 }
 
@@ -1018,7 +1030,13 @@ function toggleCompanionKill() {
   runCompanionLoop()
 }
 
+function syncHeldModifiers(e) {
+  heldShift.value = !!e.shiftKey
+  heldCtrlMeta.value = !!(e.ctrlKey || e.metaKey)
+}
+
 function onKeyDown(e) {
+  syncHeldModifiers(e)
   // dismiss victory on any key
   if (state.victoryVisible) dismissVictoryIfVisible()
 
@@ -1082,14 +1100,20 @@ function onPointerMove() {
   keyboardNav.value = false
 }
 
+function onKeyUp(e) {
+  syncHeldModifiers(e)
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keyup', onKeyUp)
   window.addEventListener('pointerdown', onPointerDown)
   window.addEventListener('pointermove', onPointerMove)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keyup', onKeyUp)
   window.removeEventListener('pointerdown', onPointerDown)
   window.removeEventListener('pointermove', onPointerMove)
   stopCompanion()
@@ -1224,16 +1248,17 @@ watch(
           <CustomSelect v-model="lang" :options="langOptions" label="" />
 
           <div ref="soundWrapEl" class="sound-wrap">
-            <button
-              ref="soundBtnEl"
-              class="icon-btn"
-              type="button"
-              aria-label="Sound"
-              title="Sound"
-              @click="toggleSound"
-            >
-              <Volume2 class="vol" aria-hidden="true" />
-            </button>
+            <Tooltip text="Sound" placement="bottom">
+              <button
+                ref="soundBtnEl"
+                class="icon-btn"
+                type="button"
+                aria-label="Sound"
+                @click="toggleSound"
+              >
+                <Volume2 class="vol" aria-hidden="true" />
+              </button>
+            </Tooltip>
 
             <div
               v-if="sound.open"
@@ -1252,28 +1277,28 @@ watch(
             </div>
           </div>
 
-          <button
-            v-if="!isMobile"
-            class="icon-btn"
-            type="button"
-            :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-            title="Toggle theme"
-            @click="toggleTheme"
-          >
-            <component :is="theme === 'dark' ? Sun : Moon" class="vol" aria-hidden="true" />
-          </button>
+          <Tooltip v-if="!isMobile" :text="theme === 'dark' ? 'Light mode' : 'Dark mode'" placement="bottom">
+            <button
+              class="icon-btn"
+              type="button"
+              :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+              @click="toggleTheme"
+            >
+              <component :is="theme === 'dark' ? Sun : Moon" class="vol" aria-hidden="true" />
+            </button>
+          </Tooltip>
 
-          <button
-            v-else
-            class="icon-btn draft-toggle"
-            type="button"
-            aria-label="Toggle draft (center marks)"
-            title="Draft (center marks)"
-            @click="toggleCenterDraft"
-          >
-            <Pencil class="vol" aria-hidden="true" />
-            <span v-if="!isCenterDraft" class="draft-badge" aria-hidden="true">OFF</span>
-          </button>
+          <Tooltip v-else text="Draft (center marks)" placement="bottom">
+            <button
+              class="icon-btn draft-toggle"
+              type="button"
+              aria-label="Toggle draft (center marks)"
+              @click="toggleCenterDraft"
+            >
+              <Pencil class="vol" aria-hidden="true" />
+              <span v-if="!isCenterDraft" class="draft-badge" aria-hidden="true">OFF</span>
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -1328,24 +1353,29 @@ watch(
           <!-- Mobile number pad (match screenshot vibe) -->
           <section v-if="isMobile" class="pad" aria-label="Number pad">
             <div class="pad-tools" aria-label="Pad tools">
-              <button class="pad-icon" type="button" aria-label="Undo" title="Undo" @click="undo">
-                <Undo2 aria-hidden="true" />
-              </button>
+              <Tooltip text="Undo" placement="top">
+                <button class="pad-icon" type="button" aria-label="Undo" @click="undo">
+                  <Undo2 aria-hidden="true" />
+                </button>
+              </Tooltip>
 
-              <button class="pad-icon" type="button" aria-label="Erase" title="Erase" @click="clearSelected">
-                <Eraser aria-hidden="true" />
-              </button>
+              <Tooltip text="Erase" placement="top">
+                <button class="pad-icon" type="button" aria-label="Erase" @click="clearSelected">
+                  <Eraser aria-hidden="true" />
+                </button>
+              </Tooltip>
 
-              <button
-                class="pad-icon pad-draft"
-                type="button"
-                aria-label="Draft (center marks)"
-                title="Draft (center marks)"
-                @click="toggleCenterDraft"
-              >
-                <Pencil aria-hidden="true" />
-                <span v-if="!isCenterDraft" class="draft-badge" aria-hidden="true">OFF</span>
-              </button>
+              <Tooltip text="Draft (center marks)" placement="top">
+                <button
+                  class="pad-icon pad-draft"
+                  type="button"
+                  aria-label="Draft (center marks)"
+                  @click="toggleCenterDraft"
+                >
+                  <Pencil aria-hidden="true" />
+                  <span v-if="!isCenterDraft" class="draft-badge" aria-hidden="true">OFF</span>
+                </button>
+              </Tooltip>
             </div>
 
             <div class="pad-nums" aria-label="Numbers">
@@ -1435,9 +1465,9 @@ watch(
                 <div class="status-text" :class="{ ok: state.finished, warn: conflictList.length && !state.finished }">{{ statusText }}</div>
 
                 <div class="mode-ind mode-ind-inline" aria-label="Entry mode">
-                  <span class="mode-chip" :class="{ on: entryMode === 'value' }">Value</span>
-                  <span class="mode-chip" :class="{ on: entryMode === 'corner' }">Corner</span>
-                  <span class="mode-chip" :class="{ on: entryMode === 'center' }">Center</span>
+                  <span class="mode-chip" :class="{ on: effectiveEntryMode === 'value' }">Value</span>
+                  <span class="mode-chip" :class="{ on: effectiveEntryMode === 'corner' }">Corner</span>
+                  <span class="mode-chip" :class="{ on: effectiveEntryMode === 'center' }">Center</span>
                 </div>
               </button>
             </div>
