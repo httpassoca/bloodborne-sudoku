@@ -7,6 +7,7 @@ import RemainingNumbers from './components/RemainingNumbers.vue'
 import Tooltip from './components/Tooltip.vue'
 import { DIFFICULTIES, computeConflicts, generatePuzzle, isSolved } from './lib/sudoku'
 import { nextLogicalMove } from './lib/logicSolver'
+import { makeClientId, makeRoomCode, makeSupabase, normalizeName } from './lib/multiplayer'
 import { LANGS, t as tt } from './i18n'
 
 function makeCell(value, given) {
@@ -23,6 +24,170 @@ function gridToCells(puzzleGrid) {
 }
 
 const difficultyKey = ref('easy')
+
+// Multiplayer (Supabase Realtime)
+const mpEnabled = ref(true)
+const mpMode = ref('coop') // 'coop' | 'versus'
+const mpRoom = ref('')
+const mpName = ref(localStorage.getItem('bbs_name') || 'Hunter')
+watch(mpName, () => localStorage.setItem('bbs_name', mpName.value), { immediate: true })
+
+const mpClientId = makeClientId()
+let supabase = null
+let mpChannel = null
+const mpConnected = ref(false)
+const mpPlayers = ref([])
+const mpError = ref('')
+
+function mpIsActive() {
+  return mpEnabled.value && mpConnected.value && mpChannel && mpRoom.value
+}
+
+function mpBroadcast(payload) {
+  if (!mpIsActive()) return
+  mpChannel.send({ type: 'broadcast', event: 'msg', payload })
+}
+
+function coopExportState() {
+  return {
+    v: 1,
+    puzzle: state.puzzle,
+    solution: state.solution,
+    cells: state.cells.map((row) =>
+      row.map((c) => ({
+        value: c.value || 0,
+        cornerNotes: Array.from(c.cornerNotes || []),
+        centerNotes: Array.from(c.centerNotes || []),
+      }))
+    ),
+    startedAt: state.startedAt,
+    at: Date.now(),
+  }
+}
+
+function coopApplyState(s) {
+  if (!s?.puzzle || !Array.isArray(s?.cells)) return
+  state.puzzle = s.puzzle
+  state.solution = s.solution || state.solution
+  state.cells = s.cells.map((row, r) =>
+    row.map((raw, c) => {
+      const given = (s.puzzle?.[r]?.[c] || 0) !== 0
+      const cell = makeCell(raw.value || 0, given)
+      cell.cornerNotes = new Set(Array.isArray(raw.cornerNotes) ? raw.cornerNotes : [])
+      cell.centerNotes = new Set(Array.isArray(raw.centerNotes) ? raw.centerNotes : [])
+      return cell
+    })
+  )
+  state.startedAt = Number(s.startedAt || Date.now())
+  state.activePlayMs = 0
+  lastActiveAt = null
+  state.finished = false
+  state.finishedAt = null
+  state.victoryVisible = false
+  state.score = 0
+  state.errors = 0
+  state.undoStack = []
+  state.redoStack = []
+  scheduleSaveGame()
+}
+
+async function mpDisconnect() {
+  mpConnected.value = false
+  mpPlayers.value = []
+  mpError.value = ''
+  if (mpChannel) {
+    try {
+      await mpChannel.unsubscribe()
+    } catch {
+      // ignore
+    }
+  }
+  mpChannel = null
+}
+
+async function mpConnect(room, mode) {
+  mpError.value = ''
+  mpRoom.value = room
+  mpMode.value = mode
+
+  if (!supabase) {
+    try {
+      supabase = makeSupabase()
+    } catch (e) {
+      mpError.value = String(e?.message || e)
+      return
+    }
+  }
+
+  await mpDisconnect()
+
+  const ch = supabase.channel(`room:${room}`, {
+    config: {
+      presence: { key: mpClientId },
+      broadcast: { ack: false },
+    },
+  })
+
+  ch.on('presence', { event: 'sync' }, () => {
+    const state = ch.presenceState()
+    const out = []
+    for (const k of Object.keys(state)) {
+      const arr = state[k] || []
+      for (const p of arr) out.push({ id: k, ...(p || {}) })
+    }
+    mpPlayers.value = out
+  })
+
+  ch.on('broadcast', { event: 'msg' }, ({ payload }) => {
+    const msg = payload
+    if (!msg || msg.by === mpClientId) return
+
+    if (msg.type === 'hello') {
+      // if coop and we have a state, offer it
+      if (mpMode.value === 'coop') {
+        mpBroadcast({ type: 'state_response', by: mpClientId, to: msg.by, state: coopExportState(), at: Date.now() })
+      }
+    }
+
+    if (msg.type === 'state_request' && mpMode.value === 'coop') {
+      mpBroadcast({ type: 'state_response', by: mpClientId, to: msg.by, state: coopExportState(), at: Date.now() })
+    }
+
+    if (msg.type === 'state_response' && mpMode.value === 'coop') {
+      if (msg.to !== mpClientId) return
+      coopApplyState(msg.state)
+    }
+
+    if (msg.type === 'coop_patch' && mpMode.value === 'coop') {
+      const p = msg.patch
+      const cell = state.cells?.[p.r]?.[p.c]
+      if (!cell || cell.given) return
+      if (typeof p.value === 'number') cell.value = p.value
+      if (Array.isArray(p.cornerNotes)) cell.cornerNotes = new Set(p.cornerNotes)
+      if (Array.isArray(p.centerNotes)) cell.centerNotes = new Set(p.centerNotes)
+      scheduleSaveGame()
+    }
+
+    if (msg.type === 'versus_stats' && mpMode.value === 'versus') {
+      // store in presence? keep simple: rely on presence state
+    }
+  })
+
+  const { error } = await ch.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      mpConnected.value = true
+      ch.track({ name: normalizeName(mpName.value), joinedAt: Date.now() })
+      mpBroadcast({ type: 'hello', by: mpClientId, name: normalizeName(mpName.value), mode: mpMode.value, at: Date.now() })
+      if (mpMode.value === 'coop') {
+        // ask for state; if none replies, keep local
+        mpBroadcast({ type: 'state_request', by: mpClientId, at: Date.now() })
+      }
+    }
+  })
+
+  if (error) mpError.value = String(error.message || error)
+  mpChannel = ch
+}
 
 const lang = ref(localStorage.getItem('bbs_lang') || 'en')
 watch(
@@ -292,7 +457,7 @@ function scoreFor(diffKey, seconds) {
   return Math.max(0, base - penalty)
 }
 
-function newHunt() {
+function newHunt({ fromNetwork = false } = {}) {
   const { puzzle, solution } = generatePuzzle(difficultyKey.value)
   state.puzzle = puzzle
   state.solution = solution
@@ -684,6 +849,28 @@ function flashCell(r, c) {
 function pushMove(move) {
   state.undoStack.push(move)
   state.redoStack = []
+
+  // broadcast coop changes
+  if (mpMode.value === 'coop' && mpIsActive()) {
+    for (const ch of move.changes || []) {
+      const cell = state.cells[ch.r]?.[ch.c]
+      if (!cell || cell.given) continue
+      mpBroadcast({
+        type: 'coop_patch',
+        by: mpClientId,
+        patch: {
+          r: ch.r,
+          c: ch.c,
+          value: cell.value,
+          cornerNotes: Array.from(cell.cornerNotes || []),
+          centerNotes: Array.from(cell.centerNotes || []),
+          at: Date.now(),
+          by: mpClientId,
+        },
+        at: Date.now(),
+      })
+    }
+  }
 }
 
 function applyMove(move, dir) {
@@ -1450,6 +1637,47 @@ watch(
 
         <aside class="sidepanel">
           <div class="sidepanel-section">
+            <div class="sidepanel-title">Multiplayer</div>
+
+            <div class="setup-row">
+              <label class="field">
+                <span class="field-label">Name</span>
+                <input v-model="mpName" class="text" type="text" autocomplete="nickname" />
+              </label>
+
+              <label class="field">
+                <span class="field-label">Mode</span>
+                <select v-model="mpMode" class="speed-select">
+                  <option value="coop">Co-op (same board)</option>
+                  <option value="versus">Versus (race)</option>
+                </select>
+              </label>
+
+              <div class="btn-row" style="grid-template-columns: 1fr 1fr">
+                <button class="btn" type="button" @click="mpConnect(makeRoomCode(), mpMode)">Create</button>
+                <button class="btn ghost" type="button" @click="mpDisconnect">Leave</button>
+              </div>
+
+              <label class="field">
+                <span class="field-label">Join code</span>
+                <div class="join-row">
+                  <input v-model="mpRoom" class="text" type="text" placeholder="ABC1234" />
+                  <button class="btn" type="button" @click="mpConnect(mpRoom.trim().toUpperCase(), mpMode)">Join</button>
+                </div>
+              </label>
+
+              <div class="mp-meta">
+                <div><b>Room:</b> {{ mpConnected ? mpRoom : '—' }}</div>
+                <div v-if="mpError" class="mp-err">{{ mpError }}</div>
+              </div>
+
+              <div class="mp-meta" v-if="mpConnected">
+                <div><b>Players:</b> {{ mpPlayers.length }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sidepanel-section">
             <div class="sidepanel-title">{{ t('huntSetup') }}</div>
 
             <div class="setup-row">
@@ -1953,6 +2181,51 @@ kbd {
   grid-template-columns: 1fr;
   gap: 10px;
   align-items: end;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.text {
+  width: 100%;
+  height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 90%, transparent);
+  color: var(--bone);
+}
+
+.text:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--blood) 60%, white);
+  outline-offset: 2px;
+}
+
+.join-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.mp-meta {
+  opacity: 0.85;
+  font-size: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.mp-err {
+  color: color-mix(in oklab, var(--blood) 75%, var(--bone));
 }
 
 .icon-btn {
