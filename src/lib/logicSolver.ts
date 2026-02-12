@@ -3,19 +3,32 @@
 //  - { r, c, n, kind: 'naked-single' }
 //  - { r, c, n, kind: 'hidden-single', unit: { type:'row'|'col'|'box', index?:number, br?:number, bc?:number } }
 
-import { isValidPlacement } from './sudoku'
+import { isValidPlacement, type Grid } from './sudoku'
 
-export function candidatesFor(grid, r, c) {
-  if (grid[r][c] !== 0) return []
-  const out = []
+export type LogicalMove =
+  | { r: number; c: number; n: number; kind: 'naked-single' }
+  | {
+      r: number
+      c: number
+      n: number
+      kind: 'hidden-single'
+      unit:
+        | { type: 'row'; index: number }
+        | { type: 'col'; index: number }
+        | { type: 'box'; br: number; bc: number }
+    }
+
+export function candidatesFor(grid: Grid, r: number, c: number): number[] {
+  if (grid[r]?.[c] !== 0) return []
+  const out: number[] = []
   for (let n = 1; n <= 9; n++) {
     if (isValidPlacement(grid, r, c, n)) out.push(n)
   }
   return out
 }
 
-function allCandidates(grid) {
-  const cand = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []))
+function allCandidates(grid: Grid): number[][][] {
+  const cand: number[][][] = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []))
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 9; c++) {
       if (grid[r][c] === 0) cand[r][c] = candidatesFor(grid, r, c)
@@ -24,7 +37,7 @@ function allCandidates(grid) {
   return cand
 }
 
-export function nextLogicalMove(grid) {
+export function nextLogicalMove(grid: Grid): LogicalMove | null {
   const cand = allCandidates(grid)
 
   // 1) Naked single
@@ -32,27 +45,27 @@ export function nextLogicalMove(grid) {
     for (let c = 0; c < 9; c++) {
       if (grid[r][c] !== 0) continue
       if (cand[r][c].length === 1) {
-        const n = cand[r][c][0]
+        const n = cand[r][c][0]!
         return { r, c, n, kind: 'naked-single' }
       }
     }
   }
 
   // Helpers for hidden singles
-  const checkUnit = (cells) => {
-    const counts = new Map() // n -> [{r,c}]
+  const checkUnit = (cells: Array<{ r: number; c: number }>): { r: number; c: number; n: number } | null => {
+    const counts = new Map<number, Array<{ r: number; c: number }>>() // n -> [{r,c}]
     for (const { r, c } of cells) {
       if (grid[r][c] !== 0) continue
       for (const n of cand[r][c]) {
         if (!counts.has(n)) counts.set(n, [])
-        counts.get(n).push({ r, c })
+        counts.get(n)!.push({ r, c })
       }
     }
 
     for (let n = 1; n <= 9; n++) {
       const spots = counts.get(n) || []
       if (spots.length === 1) {
-        const { r, c } = spots[0]
+        const { r, c } = spots[0]!
         return { r, c, n }
       }
     }
@@ -76,7 +89,7 @@ export function nextLogicalMove(grid) {
   // 4) Hidden single in boxes
   for (let br = 0; br < 3; br++) {
     for (let bc = 0; bc < 3; bc++) {
-      const cells = []
+      const cells: Array<{ r: number; c: number }> = []
       for (let r = br * 3; r < br * 3 + 3; r++) {
         for (let c = bc * 3; c < bc * 3 + 3; c++) cells.push({ r, c })
       }

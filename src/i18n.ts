@@ -1,9 +1,12 @@
-export const LANGS = [
+export type LangKey = 'en' | 'pt-BR'
+
+export const LANGS: Array<{ key: LangKey; label: string }> = [
   { key: 'en', label: 'English' },
   { key: 'pt-BR', label: 'Português (Brasil)' },
 ]
 
-export const MESSAGES = {
+// Keeping this loosely typed on purpose (strings + small formatting functions).
+export const MESSAGES: Record<string, any> = {
   en: {
     appTitle: 'Bloodborne Sudoku',
     subtitle: 'A small hunt of numbers. A large hunt of patience.',
@@ -42,8 +45,8 @@ export const MESSAGES = {
     victoryTitle: 'PREY SLAUGHTERED',
     victoryHint: 'Press any key or click anywhere to continue.',
 
-    statusSolved: (score) => `PREY SLAUGHTERED — Score ${score}`,
-    statusConflicts: (n) => `${n} conflicts — your blood sings.`,
+    statusSolved: (score: number) => `PREY SLAUGHTERED — Score ${score}`,
+    statusConflicts: (n: number) => `${n} conflicts — your blood sings.`,
     statusIdle: 'Seek paleblood, to transcend the hunt.',
 
     diff: {
@@ -61,12 +64,16 @@ export const MESSAGES = {
       undoing: 'Companion: I smell blood. Undoing mistakes…',
       reverting: 'Companion: Reverting your steps to before the mistake…',
       decisionHint: 'Decision is highlighted on the board.',
-      nakedSingle: ({ r, c, n }) => `Companion: Only candidate for r${r + 1}c${c + 1} is ${n}.`,
-      hiddenRow: ({ r, c, n, idx }) => `Companion: ${n} can only go in one place in row ${idx + 1} → r${r + 1}c${c + 1}.`,
-      hiddenCol: ({ r, c, n, idx }) => `Companion: ${n} can only go in one place in column ${idx + 1} → r${r + 1}c${c + 1}.`,
-      hiddenBox: ({ r, c, n, br, bc }) =>
+      nakedSingle: ({ r, c, n }: { r: number; c: number; n: number }) =>
+        `Companion: Only candidate for r${r + 1}c${c + 1} is ${n}.`,
+      hiddenRow: ({ r, c, n, idx }: { r: number; c: number; n: number; idx: number }) =>
+        `Companion: ${n} can only go in one place in row ${idx + 1} → r${r + 1}c${c + 1}.`,
+      hiddenCol: ({ r, c, n, idx }: { r: number; c: number; n: number; idx: number }) =>
+        `Companion: ${n} can only go in one place in column ${idx + 1} → r${r + 1}c${c + 1}.`,
+      hiddenBox: ({ r, c, n, br, bc }: { r: number; c: number; n: number; br: number; bc: number }) =>
         `Companion: ${n} can only go in one place in box (${br + 1},${bc + 1}) → r${r + 1}c${c + 1}.`,
-      fallback: ({ r, c, n }) => `Companion: No simple single found. Revealing the next correct value: ${n} (r${r + 1}c${c + 1}).`,
+      fallback: ({ r, c, n }: { r: number; c: number; n: number }) =>
+        `Companion: No simple single found. Revealing the next correct value: ${n} (r${r + 1}c${c + 1}).`,
     },
   },
 
@@ -108,8 +115,8 @@ export const MESSAGES = {
     victoryTitle: 'PRESA ABATIDA',
     victoryHint: 'Pressione qualquer tecla ou toque na tela para continuar.',
 
-    statusSolved: (score) => `PRESA ABATIDA — Pontuação ${score}`,
-    statusConflicts: (n) => `${n} conflitos — o sangue chama.`,
+    statusSolved: (score: number) => `PRESA ABATIDA — Pontuação ${score}`,
+    statusConflicts: (n: number) => `${n} conflitos — o sangue chama.`,
     statusIdle: 'Busque paleblood, para transcender a caçada.',
 
     diff: {
@@ -127,26 +134,30 @@ export const MESSAGES = {
       undoing: 'Companheiro: sinto o cheiro de sangue. Desfazendo erros…',
       reverting: 'Companheiro: voltando para antes do erro…',
       decisionHint: 'A decisão está destacada no tabuleiro.',
-      nakedSingle: ({ r, c, n }) => `Companheiro: o único candidato para l${r + 1}c${c + 1} é ${n}.`,
-      hiddenRow: ({ r, c, n, idx }) => `Companheiro: ${n} só pode ir em um lugar na linha ${idx + 1} → l${r + 1}c${c + 1}.`,
-      hiddenCol: ({ r, c, n, idx }) => `Companheiro: ${n} só pode ir em um lugar na coluna ${idx + 1} → l${r + 1}c${c + 1}.`,
-      hiddenBox: ({ r, c, n, br, bc }) =>
+      nakedSingle: ({ r, c, n }: { r: number; c: number; n: number }) =>
+        `Companheiro: o único candidato para l${r + 1}c${c + 1} é ${n}.`,
+      hiddenRow: ({ r, c, n, idx }: { r: number; c: number; n: number; idx: number }) =>
+        `Companheiro: ${n} só pode ir em um lugar na linha ${idx + 1} → l${r + 1}c${c + 1}.`,
+      hiddenCol: ({ r, c, n, idx }: { r: number; c: number; n: number; idx: number }) =>
+        `Companheiro: ${n} só pode ir em um lugar na coluna ${idx + 1} → l${r + 1}c${c + 1}.`,
+      hiddenBox: ({ r, c, n, br, bc }: { r: number; c: number; n: number; br: number; bc: number }) =>
         `Companheiro: ${n} só pode ir em um lugar no bloco (${br + 1},${bc + 1}) → l${r + 1}c${c + 1}.`,
-      fallback: ({ r, c, n }) => `Companheiro: não achei um single simples. Revelando o próximo valor correto: ${n} (l${r + 1}c${c + 1}).`,
+      fallback: ({ r, c, n }: { r: number; c: number; n: number }) =>
+        `Companheiro: não achei um single simples. Revelando o próximo valor correto: ${n} (l${r + 1}c${c + 1}).`,
     },
   },
 }
 
-export function t(lang, key, params) {
+export function t(lang: string, key: string, params?: any): string {
   const dict = MESSAGES[lang] || MESSAGES.en
 
   const parts = key.split('.')
-  let cur = dict
+  let cur: any = dict
   for (const p of parts) {
     cur = cur?.[p]
   }
 
-  if (typeof cur === 'function') return cur(params)
+  if (typeof cur === 'function') return String(cur(params))
   if (typeof cur === 'string') return cur
 
   return key

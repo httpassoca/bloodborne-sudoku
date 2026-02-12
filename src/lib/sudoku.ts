@@ -2,7 +2,17 @@
  * Grid is a 9x9 array of numbers 0-9 (0 = empty).
  */
 
-export const DIFFICULTIES = [
+export type Grid = number[][] // 9x9
+
+export type DifficultyKey = 'easy' | 'medium' | 'hard' | 'expert' | 'nightmare'
+
+export type Difficulty = {
+  key: DifficultyKey
+  label: string
+  blanks: number
+}
+
+export const DIFFICULTIES: Difficulty[] = [
   { key: 'easy', label: 'Easy (Yharnam Street)', blanks: 36 },
   { key: 'medium', label: 'Medium (Cathedral Ward)', blanks: 45 },
   { key: 'hard', label: 'Hard (Forbidden Woods)', blanks: 51 },
@@ -10,16 +20,16 @@ export const DIFFICULTIES = [
   { key: 'nightmare', label: 'Nightmare (Mensis)', blanks: 60 },
 ]
 
-export function emptyGrid() {
+export function emptyGrid(): Grid {
   return Array.from({ length: 9 }, () => Array(9).fill(0))
 }
 
-export function cloneGrid(grid) {
+export function cloneGrid(grid: Grid): Grid {
   return grid.map((r) => r.slice())
 }
 
-function shuffled(arr) {
-  const a = arr.slice()
+function shuffled<T>(arr: readonly T[]): T[] {
+  const a = arr.slice() as T[]
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
     ;[a[i], a[j]] = [a[j], a[i]]
@@ -27,7 +37,7 @@ function shuffled(arr) {
   return a
 }
 
-export function isValidPlacement(grid, row, col, n) {
+export function isValidPlacement(grid: Grid, row: number, col: number, n: number): boolean {
   // row/col
   for (let i = 0; i < 9; i++) {
     if (grid[row][i] === n) return false
@@ -44,7 +54,7 @@ export function isValidPlacement(grid, row, col, n) {
   return true
 }
 
-function findEmpty(grid) {
+function findEmpty(grid: Grid): [number, number] | null {
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 9; c++) {
       if (grid[r][c] === 0) return [r, c]
@@ -53,11 +63,11 @@ function findEmpty(grid) {
   return null
 }
 
-export function solve(grid) {
+export function solve(grid: Grid): boolean {
   const pos = findEmpty(grid)
   if (!pos) return true
   const [r, c] = pos
-  for (const n of shuffled([1, 2, 3, 4, 5, 6, 7, 8, 9])) {
+  for (const n of shuffled([1, 2, 3, 4, 5, 6, 7, 8, 9] as const)) {
     if (isValidPlacement(grid, r, c, n)) {
       grid[r][c] = n
       if (solve(grid)) return true
@@ -68,13 +78,13 @@ export function solve(grid) {
 }
 
 // Count solutions up to `limit` (for uniqueness testing)
-export function countSolutions(grid, limit = 2) {
+export function countSolutions(grid: Grid, limit = 2): number {
   const pos = findEmpty(grid)
   if (!pos) return 1
   const [r, c] = pos
 
   let count = 0
-  for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
+  for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9] as const) {
     if (isValidPlacement(grid, r, c, n)) {
       grid[r][c] = n
       count += countSolutions(grid, limit)
@@ -85,15 +95,15 @@ export function countSolutions(grid, limit = 2) {
   return count
 }
 
-export function generateSolvedGrid() {
+export function generateSolvedGrid(): Grid {
   const grid = emptyGrid()
   // Seed diagonal boxes for faster generation
   for (let box = 0; box < 3; box++) {
-    const nums = shuffled([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    const nums = shuffled([1, 2, 3, 4, 5, 6, 7, 8, 9] as const)
     let k = 0
     for (let r = box * 3; r < box * 3 + 3; r++) {
       for (let c = box * 3; c < box * 3 + 3; c++) {
-        grid[r][c] = nums[k++]
+        grid[r][c] = nums[k++]!
       }
     }
   }
@@ -101,15 +111,17 @@ export function generateSolvedGrid() {
   return grid
 }
 
-export function generatePuzzle(difficultyKey = 'easy') {
+export function generatePuzzle(difficultyKey: DifficultyKey = 'easy'): {
+  puzzle: Grid
+  solution: Grid
+  difficulty: Difficulty
+} {
   const diff = DIFFICULTIES.find((d) => d.key === difficultyKey) || DIFFICULTIES[0]
   const solution = generateSolvedGrid()
   const puzzle = cloneGrid(solution)
 
   // list all cell coordinates, remove in random order
-  const coords = shuffled(
-    Array.from({ length: 81 }, (_, i) => [Math.floor(i / 9), i % 9])
-  )
+  const coords = shuffled(Array.from({ length: 81 }, (_, i) => [Math.floor(i / 9), i % 9] as const))
 
   let removed = 0
   for (const [r, c] of coords) {
@@ -134,7 +146,7 @@ export function generatePuzzle(difficultyKey = 'easy') {
   return { puzzle, solution, difficulty: diff }
 }
 
-export function isSolved(current, solution) {
+export function isSolved(current: Grid, solution: Grid): boolean {
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 9; c++) {
       if (current[r][c] !== solution[r][c]) return false
@@ -143,18 +155,18 @@ export function isSolved(current, solution) {
   return true
 }
 
-export function computeConflicts(grid) {
+export function computeConflicts(grid: Grid): Set<string> {
   // returns Set of "r,c" strings that are in conflict (duplicates) among filled cells
-  const bad = new Set()
+  const bad = new Set<string>()
 
   // rows
   for (let r = 0; r < 9; r++) {
-    const seen = new Map()
+    const seen = new Map<number, Array<[number, number]>>()
     for (let c = 0; c < 9; c++) {
       const v = grid[r][c]
       if (!v) continue
       if (!seen.has(v)) seen.set(v, [])
-      seen.get(v).push([r, c])
+      seen.get(v)!.push([r, c])
     }
     for (const coords of seen.values()) {
       if (coords.length > 1) coords.forEach(([rr, cc]) => bad.add(`${rr},${cc}`))
@@ -163,12 +175,12 @@ export function computeConflicts(grid) {
 
   // cols
   for (let c = 0; c < 9; c++) {
-    const seen = new Map()
+    const seen = new Map<number, Array<[number, number]>>()
     for (let r = 0; r < 9; r++) {
       const v = grid[r][c]
       if (!v) continue
       if (!seen.has(v)) seen.set(v, [])
-      seen.get(v).push([r, c])
+      seen.get(v)!.push([r, c])
     }
     for (const coords of seen.values()) {
       if (coords.length > 1) coords.forEach(([rr, cc]) => bad.add(`${rr},${cc}`))
@@ -178,13 +190,13 @@ export function computeConflicts(grid) {
   // boxes
   for (let br = 0; br < 3; br++) {
     for (let bc = 0; bc < 3; bc++) {
-      const seen = new Map()
+      const seen = new Map<number, Array<[number, number]>>()
       for (let r = br * 3; r < br * 3 + 3; r++) {
         for (let c = bc * 3; c < bc * 3 + 3; c++) {
           const v = grid[r][c]
           if (!v) continue
           if (!seen.has(v)) seen.set(v, [])
-          seen.get(v).push([r, c])
+          seen.get(v)!.push([r, c])
         }
       }
       for (const coords of seen.values()) {
