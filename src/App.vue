@@ -1323,11 +1323,7 @@ watch(
             @select="(pos) => selectCell(pos)"
           />
 
-          <div class="mode-ind" aria-label="Entry mode">
-            <span class="mode-chip" :class="{ on: entryMode === 'value' }">Value</span>
-            <span class="mode-chip" :class="{ on: entryMode === 'corner' }">Corner</span>
-            <span class="mode-chip" :class="{ on: entryMode === 'center' }">Center</span>
-          </div>
+          <!-- mode indicator moved under Status -->
 
           <!-- Mobile number pad (match screenshot vibe) -->
           <section v-if="isMobile" class="pad" aria-label="Number pad">
@@ -1436,7 +1432,13 @@ watch(
                 @click="conflictList.length ? cycleConflict() : null"
               >
                 <div class="sidepanel-title" style="margin:0">{{ t('status') }}</div>
-                <div class="status-text">{{ statusText }}</div>
+                <div class="status-text" :class="{ ok: state.finished, warn: conflictList.length && !state.finished }">{{ statusText }}</div>
+
+                <div class="mode-ind mode-ind-inline" aria-label="Entry mode">
+                  <span class="mode-chip" :class="{ on: entryMode === 'value' }">Value</span>
+                  <span class="mode-chip" :class="{ on: entryMode === 'corner' }">Corner</span>
+                  <span class="mode-chip" :class="{ on: entryMode === 'center' }">Center</span>
+                </div>
               </button>
             </div>
           </div>
@@ -1707,6 +1709,12 @@ h1 {
   justify-content: center;
   gap: 8px;
   padding: 6px 0;
+}
+
+.mode-ind-inline {
+  justify-content: flex-start;
+  padding: 10px 0 0;
+  opacity: 0.95;
 }
 
 .mode-chip {
@@ -2045,6 +2053,15 @@ kbd {
 .status-text {
   font-weight: 800;
   letter-spacing: 0.04em;
+  color: color-mix(in oklab, var(--bone) 80%, var(--mist));
+}
+
+.status-text.ok {
+  color: color-mix(in oklab, var(--sage) 70%, var(--bone));
+}
+
+.status-text.warn {
+  color: color-mix(in oklab, var(--blood) 75%, var(--bone));
 }
 
 .mini-hud {

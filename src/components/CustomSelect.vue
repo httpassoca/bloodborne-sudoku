@@ -88,6 +88,8 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointerDo
       role="combobox"
       :aria-expanded="open"
       aria-haspopup="listbox"
+      :aria-controls="'listbox-' + _uid"
+      :aria-activedescendant="open ? ('opt-' + _uid + '-' + activeIndex) : undefined"
       @click="toggle"
       @keydown="onKeyDown"
     >
@@ -95,9 +97,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointerDo
       <span class="chev" aria-hidden="true">▾</span>
     </button>
 
-    <div v-if="open" class="menu" role="listbox">
+    <div v-if="open" class="menu" role="listbox" :id="'listbox-' + _uid">
       <button
         v-for="(opt, i) in options"
+        :id="'opt-' + _uid + '-' + i"
         :key="opt.key"
         class="item"
         type="button"
@@ -185,12 +188,21 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointerDo
   background: transparent;
   color: var(--bone);
   cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
 }
 
 .item[data-active='1'],
 .item:hover {
   background: color-mix(in oklab, var(--panel) 70%, var(--blood) 10%);
   border-color: color-mix(in oklab, var(--ink) 55%, transparent);
+}
+
+.item:hover {
+  transform: translateY(-1px);
+}
+
+.item:active {
+  transform: translateY(0px);
 }
 
 .mark {
