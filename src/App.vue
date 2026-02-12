@@ -73,7 +73,7 @@ const otherSelections = computed(() => {
     const sel = p.sel
     if (!sel) continue
     const arr = map.get(sel) || []
-    arr.push({ color: p.color || '#b8f2e6', label: initials(p.name) })
+    arr.push({ color: p.color || '#b8f2e6', label: initials(p.name), name: p.name || '' })
     map.set(sel, arr)
   }
   return map

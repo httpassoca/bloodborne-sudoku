@@ -107,8 +107,10 @@ const cornerSlots = [
         :key="i"
         class="other-dot"
         :style="{ '--oc': o.color }"
+        :data-name="o.name || ''"
       >
         {{ o.label }}
+        <span class="other-tip" :style="{ '--oc': o.color }">{{ o.name }}</span>
       </span>
     </div>
 
@@ -175,6 +177,41 @@ const cornerSlots = [
   background: color-mix(in oklab, var(--oc) 72%, white);
   color: rgba(10, 10, 10, 0.85);
   border: 1px solid color-mix(in oklab, var(--oc) 70%, black);
+  position: relative;
+}
+
+.other-tip {
+  position: absolute;
+  left: 50%;
+  top: -10px;
+  transform: translateX(-50%) translateY(-8px);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--oc) 65%, black);
+  background: color-mix(in oklab, var(--oc) 55%, black);
+  color: color-mix(in oklab, white 90%, var(--oc));
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.55);
+
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.other-dot:hover .other-tip,
+.other-dot:focus-visible .other-tip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-14px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .other-tip {
+    transition: none;
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
