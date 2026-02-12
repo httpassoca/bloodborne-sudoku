@@ -235,7 +235,10 @@ const entryMode = ref('value') // 'value' | 'corner' | 'center'
 const heldShift = ref(false)
 const heldCtrlMeta = ref(false)
 
+const boardActive = ref(false)
+
 const effectiveEntryMode = computed(() => {
+  if (!boardActive.value) return entryMode.value
   if (heldCtrlMeta.value) return 'center'
   if (heldShift.value) return 'corner'
   return entryMode.value
@@ -1037,11 +1040,16 @@ function syncHeldModifiers(e) {
 
 function onKeyDown(e) {
   syncHeldModifiers(e)
+
+  // only reflect modifier-based mode when the game is being played
+  const tag = (e.target?.tagName || '').toLowerCase()
+  const isForm = tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'option'
+  if (!isForm) boardActive.value = true
+
   // dismiss victory on any key
   if (state.victoryVisible) dismissVictoryIfVisible()
 
-  const tag = (e.target?.tagName || '').toLowerCase()
-  if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'option') return
+  if (isForm) return
 
   // Ctrl+Shift+Z / Cmd+Shift+Z => redo
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
@@ -1091,9 +1099,13 @@ function onKeyDown(e) {
   }
 }
 
-function onPointerDown() {
+function onPointerDown(e) {
   dismissVictoryIfVisible()
   keyboardNav.value = false
+
+  // Set active only when interacting with the board area
+  const t = e?.target
+  boardActive.value = !!t?.closest?.('.board, .board-wrap')
 }
 
 function onPointerMove() {
@@ -1159,9 +1171,11 @@ const soundBtnEl = ref(null)
 function positionSoundPop() {
   const r = soundBtnEl.value?.getBoundingClientRect()
   if (!r) return
+
   const pad = 10
-  const w = 52 // rotated slider needs less horizontal space
-  const h = 200
+  const isMobilePop = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 560px)').matches
+  const w = isMobilePop ? 220 : 52
+  const h = isMobilePop ? 70 : 200
 
   const cx = r.left + r.width / 2
   const desiredLeft = cx
@@ -1319,14 +1333,19 @@ watch(
         </div>
 
         <div class="hud-group" aria-label="Timer and errors">
-          <div class="hud-item hud-item-icon" aria-label="Timer">
-            <Clock class="hud-ico" aria-hidden="true" />
-            <span class="hud-v hud-v-mono">{{ timeLabel }}</span>
-          </div>
-          <div class="hud-item hud-item-icon" aria-label="Errors">
-            <AlertOctagon class="hud-ico" aria-hidden="true" />
-            <span class="hud-v hud-v-mono">{{ state.errors }}</span>
-          </div>
+          <Tooltip text="Timer" placement="bottom">
+            <div class="hud-item hud-item-icon" aria-label="Timer" tabindex="0">
+              <Clock class="hud-ico" aria-hidden="true" />
+              <span class="hud-v hud-v-mono">{{ timeLabel }}</span>
+            </div>
+          </Tooltip>
+
+          <Tooltip text="Errors" placement="bottom">
+            <div class="hud-item hud-item-icon" aria-label="Errors" tabindex="0">
+              <AlertOctagon class="hud-ico" aria-hidden="true" />
+              <span class="hud-v hud-v-mono">{{ state.errors }}</span>
+            </div>
+          </Tooltip>
         </div>
       </div>
     </header>
@@ -1759,7 +1778,9 @@ h1 {
 
 .mode-chip.on {
   opacity: 1;
-  border-color: color-mix(in oklab, var(--gold) 55%, var(--ink));
+  border-color: color-mix(in oklab, var(--blood) 55%, var(--ink));
+  background: color-mix(in oklab, var(--panel) 70%, var(--blood) 10%);
+  color: color-mix(in oklab, var(--bone) 90%, white);
 }
 
 .sidepanel {

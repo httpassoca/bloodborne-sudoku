@@ -42,9 +42,10 @@ function onPointerDown(e) {
   if (!e || e.button !== 0) return
   dragActive = true
   dragPointerId = e.pointerId
-  dragAdditive = !!(e.shiftKey || e.ctrlKey || e.metaKey)
 
-  // normal click selects; modifier starts multi-select
+  // If there is already a multi-selection, keep it while dragging (no need for Shift).
+  dragAdditive = !!(e.shiftKey || e.ctrlKey || e.metaKey || props.multi)
+
   emit('select', { row: props.row, col: props.col, mode: dragAdditive ? 'extend' : 'replace', additive: dragAdditive })
 }
 
