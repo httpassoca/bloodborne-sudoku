@@ -10,6 +10,7 @@ import { DIFFICULTIES, cloneGrid, computeConflicts, generatePuzzle, isSolved, so
 import { nextLogicalMove } from './lib/logicSolver'
 import { makeClientId, makeRoomCode, makeSupabase, normalizeName } from './lib/multiplayer'
 import { decodePuzzle, encodePuzzle } from './lib/puzzleCode'
+import { signInWithGoogle, signOut } from './lib/auth'
 import { LANGS, t as tt } from './i18n'
 
 function makeCell(value, given) {
@@ -41,6 +42,10 @@ watch(mpName, () => localStorage.setItem('bbs_name', mpName.value), { immediate:
 
 const mpClientId = makeClientId()
 
+// Auth/session
+const authUser = ref(null)
+const authEmail = computed(() => authUser.value?.email || '')
+
 const PASTEL_COLORS = [
   { key: 'rose', label: 'Rose', value: '#f6a6b2' },
   { key: 'peach', label: 'Peach', value: '#f7c59f' },
@@ -71,6 +76,58 @@ let mpChannel = null
 const mpConnected = ref(false)
 const mpPlayers = ref([])
 const mpError = ref('')
+
+function getSupabase() {
+  if (!supabase) supabase = makeSupabase()
+  return supabase
+}
+
+// History
+const historyOpen = ref(false)
+const historyLoading = ref(false)
+const historyError = ref('')
+const historyItems = ref([])
+
+async function loadHistory() {
+  if (!authUser.value) return
+  historyError.value = ''
+  historyLoading.value = true
+  try {
+    const sb = getSupabase()
+    const { data, error } = await sb
+      .from('games')
+      .select('id, created_at, finished_at, puzzle_code, difficulty, mode, score, errors, time_sec')
+      .order('created_at', { ascending: false })
+      .limit(100)
+    if (error) throw error
+    historyItems.value = data || []
+  } catch (e) {
+    historyError.value = String(e?.message || e)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function saveFinishedGameToCloud() {
+  if (!authUser.value) return
+  try {
+    const sb = getSupabase()
+    const payload = {
+      user_id: authUser.value.id,
+      puzzle_code: currentPuzzleCode(),
+      difficulty: difficultyKey.value,
+      mode: mpIsActive() ? mpMode.value : 'solo',
+      score: state.score,
+      errors: state.errors,
+      time_sec: elapsedSeconds.value,
+      finished_at: new Date().toISOString(),
+    }
+    const { error } = await sb.from('games').insert(payload)
+    if (error) throw error
+  } catch {
+    // ignore cloud save errors for now
+  }
+}
 
 function initials(name) {
   const t = String(name || '').trim()
@@ -603,10 +660,24 @@ function newHunt({ fromNetwork = false } = {}) {
   loadBestScore()
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadBestScore()
   const restored = loadSavedGame()
   if (!restored) newHunt()
+
+  // Auth bootstrap
+  try {
+    const sb = getSupabase()
+    const { data } = await sb.auth.getUser()
+    authUser.value = data?.user || null
+
+    sb.auth.onAuthStateChange((_event, session) => {
+      authUser.value = session?.user || null
+      if (authUser.value && historyOpen.value) loadHistory()
+    })
+  } catch {
+    // ignore
+  }
 })
 
 watch(difficultyKey, () => {
@@ -801,6 +872,9 @@ function tryFinishCheck() {
     playVictorySfx()
 
     state.companion.running = false
+
+    // Cloud history
+    saveFinishedGameToCloud()
   }
 }
 
@@ -1568,6 +1642,24 @@ watch(
         <div class="header-actions">
           <CustomSelect v-model="lang" :options="langOptions" label="" />
 
+          <Tooltip v-if="!authUser" text="Login with Google" placement="bottom">
+            <button class="icon-btn" type="button" aria-label="Login with Google" @click="signInWithGoogle">
+              <span class="btnIcon" aria-hidden="true">G</span>
+            </button>
+          </Tooltip>
+
+          <Tooltip v-else :text="authEmail || 'Account'" placement="bottom">
+            <button class="icon-btn" type="button" aria-label="Logout" @click="signOut">
+              <span class="btnIcon" aria-hidden="true">⎋</span>
+            </button>
+          </Tooltip>
+
+          <Tooltip v-if="authUser" text="History" placement="bottom">
+            <button class="icon-btn" type="button" aria-label="History" @click="(historyOpen = !historyOpen, historyOpen && loadHistory())">
+              <span class="btnIcon" aria-hidden="true">☰</span>
+            </button>
+          </Tooltip>
+
           <div ref="soundWrapEl" class="sound-wrap">
             <Tooltip text="Sound" placement="bottom">
               <button
@@ -1885,6 +1977,39 @@ watch(
     <footer class="footer">
       <span>Made for the Hunt. No bells were rung.</span>
     </footer>
+
+    <div v-if="historyOpen" class="history" role="dialog" aria-label="Game history">
+      <div class="history-inner">
+        <div class="history-head">
+          <div class="sidepanel-title" style="margin:0">History</div>
+          <button class="icon-btn" type="button" aria-label="Close history" @click="historyOpen = false">✕</button>
+        </div>
+
+        <div v-if="historyLoading" class="mp-meta">Loading…</div>
+        <div v-if="historyError" class="mp-err">{{ historyError }}</div>
+
+        <div v-if="!historyLoading && !historyError" class="history-list">
+          <div v-if="!historyItems.length" class="mp-meta">No games yet.</div>
+          <div v-for="g in historyItems" :key="g.id" class="history-item">
+            <div class="history-top">
+              <div><b>Score:</b> {{ g.score }}</div>
+              <div><b>Errors:</b> {{ g.errors }}</div>
+              <div><b>Time:</b> {{ g.time_sec }}s</div>
+            </div>
+            <div class="history-sub">
+              <span>{{ g.difficulty || '—' }}</span>
+              <span>·</span>
+              <span>{{ g.mode }}</span>
+              <span>·</span>
+              <span>{{ new Date(g.created_at).toLocaleString() }}</span>
+            </div>
+            <div class="history-code">
+              <code>{{ g.puzzle_code }}</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -2634,6 +2759,68 @@ kbd {
   opacity: 0.65;
   font-size: 12px;
   letter-spacing: 0.06em;
+}
+
+.history {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 3000;
+}
+
+.history-inner {
+  width: min(980px, 94vw);
+  max-height: min(80vh, 720px);
+  overflow: auto;
+  border-radius: 18px;
+  background: color-mix(in oklab, var(--panel) 88%, black);
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  box-shadow: 0 28px 110px rgba(0, 0, 0, 0.75);
+  padding: 14px;
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.history-item {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--panel) 84%, transparent);
+}
+
+.history-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-weight: 800;
+}
+
+.history-sub {
+  margin-top: 6px;
+  opacity: 0.8;
+  font-size: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.history-code {
+  margin-top: 8px;
+  opacity: 0.9;
 }
 
 /* victory overlay */
