@@ -88,6 +88,21 @@ const historyLoading = ref(false)
 const historyError = ref('')
 const historyItems = ref([])
 
+function formatDur(sec) {
+  const s = Math.max(0, Number(sec || 0))
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  return `${m}m${r}s`
+}
+
+async function copyText(s) {
+  try {
+    await navigator.clipboard.writeText(String(s || ''))
+  } catch {
+    // ignore
+  }
+}
+
 async function loadHistory() {
   if (!authUser.value) return
   historyError.value = ''
@@ -1644,7 +1659,12 @@ watch(
 
           <Tooltip v-if="!authUser" text="Login with Google" placement="bottom">
             <button class="icon-btn" type="button" aria-label="Login with Google" @click="signInWithGoogle">
-              <span class="btnIcon" aria-hidden="true">G</span>
+              <svg class="gico" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M12 10.2v3.6h5.02c-.22 1.44-1.66 4.22-5.02 4.22-3.03 0-5.5-2.5-5.5-5.6s2.47-5.6 5.5-5.6c1.73 0 2.9.75 3.57 1.4l2.43-2.36C16.96 8.56 15.03 7.5 12 7.5 7.86 7.5 4.5 10.86 4.5 15s3.36 7.5 7.5 7.5c4.33 0 7.2-3.04 7.2-7.32 0-.49-.05-.86-.12-1.23H12z"
+                />
+              </svg>
             </button>
           </Tooltip>
 
@@ -1813,8 +1833,8 @@ watch(
             </div>
 
             <div class="btn-row companion-row">
-              <button class="btn" type="button" @click="toggleCompanionKill" disabled aria-disabled="true">
-                {{ t('companionKill') }}
+              <button class="btn" type="button" @click="toggleCompanionKill" :disabled="mpIsActive()" :aria-disabled="mpIsActive()">
+                {{ state.companion.running ? t('stopCompanion') : t('companionKill') }}
               </button>
             </div>
 
@@ -1994,7 +2014,7 @@ watch(
             <div class="history-top">
               <div><b>Score:</b> {{ g.score }}</div>
               <div><b>Errors:</b> {{ g.errors }}</div>
-              <div><b>Time:</b> {{ g.time_sec }}s</div>
+              <div><b>Time:</b> {{ formatDur(g.time_sec) }}</div>
             </div>
             <div class="history-sub">
               <span>{{ g.difficulty || '—' }}</span>
@@ -2004,7 +2024,9 @@ watch(
               <span>{{ new Date(g.created_at).toLocaleString() }}</span>
             </div>
             <div class="history-code">
-              <code>{{ g.puzzle_code }}</code>
+              <button class="code-btn" type="button" :aria-label="'Copy puzzle code'" @click="copyText(g.puzzle_code)">
+                <code>{{ g.puzzle_code }}</code>
+              </button>
             </div>
           </div>
         </div>
@@ -2393,6 +2415,12 @@ kbd {
 .vol {
   width: 22px;
   height: 22px;
+}
+
+.gico {
+  width: 22px;
+  height: 22px;
+  opacity: 0.9;
 }
 
 .sound-pop {
@@ -2820,7 +2848,33 @@ kbd {
 
 .history-code {
   margin-top: 8px;
-  opacity: 0.9;
+}
+
+.code-btn {
+  width: 100%;
+  text-align: left;
+  border: 1px dashed color-mix(in oklab, var(--ink) 55%, transparent);
+  background: transparent;
+  padding: 10px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  color: color-mix(in oklab, var(--mist) 80%, var(--bone));
+  transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
+}
+
+.code-btn:hover {
+  background: color-mix(in oklab, var(--panel) 72%, transparent);
+  border-color: color-mix(in oklab, var(--gold) 35%, var(--ink));
+  transform: translateY(-1px);
+}
+
+.code-btn:active {
+  transform: translateY(0px);
+}
+
+.code-btn:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--blood) 60%, white);
+  outline-offset: 2px;
 }
 
 /* victory overlay */
