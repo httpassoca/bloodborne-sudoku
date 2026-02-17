@@ -6,9 +6,10 @@ import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
 import Tooltip from './components/Tooltip.vue'
 import Accordion from './components/Accordion.vue'
-import { DIFFICULTIES, computeConflicts, generatePuzzle, isSolved } from './lib/sudoku'
+import { DIFFICULTIES, cloneGrid, computeConflicts, generatePuzzle, isSolved, solveDeterministic } from './lib/sudoku'
 import { nextLogicalMove } from './lib/logicSolver'
 import { makeClientId, makeRoomCode, makeSupabase, normalizeName } from './lib/multiplayer'
+import { decodePuzzle, encodePuzzle } from './lib/puzzleCode'
 import { LANGS, t as tt } from './i18n'
 
 function makeCell(value, given) {
@@ -379,6 +380,61 @@ function loadSavedGame() {
     return ok
   } catch {
     return false
+  }
+}
+
+const puzzleCodeInput = ref('')
+const puzzleCodeError = ref('')
+
+function currentPuzzleCode() {
+  try {
+    return encodePuzzle(state.puzzle)
+  } catch {
+    return ''
+  }
+}
+
+async function copyPuzzleCode() {
+  const code = currentPuzzleCode()
+  if (!code) return
+  try {
+    await navigator.clipboard.writeText(code)
+  } catch {
+    // ignore
+  }
+}
+
+function loadPuzzleFromCode() {
+  puzzleCodeError.value = ''
+  try {
+    const puzzle = decodePuzzle(puzzleCodeInput.value)
+
+    const sol = cloneGrid(puzzle)
+    const ok = solveDeterministic(sol)
+    if (!ok) throw new Error('No solution')
+
+    state.puzzle = puzzle
+    state.solution = sol
+    state.cells = gridToCells(puzzle)
+
+    state.selected = { row: 0, col: 0 }
+    state.multiSelected = new Set(['0,0'])
+
+    state.startedAt = Date.now()
+    state.activePlayMs = 0
+    lastActiveAt = null
+    state.finished = false
+    state.finishedAt = null
+
+    state.victoryVisible = false
+    state.score = 0
+    state.errors = 0
+    state.undoStack = []
+    state.redoStack = []
+
+    scheduleSaveGame()
+  } catch (e) {
+    puzzleCodeError.value = String(e?.message || e)
   }
 }
 
@@ -1773,6 +1829,18 @@ watch(
 
             <div class="setup-row">
               <CustomSelect v-model="difficultyKey" :options="difficultiesLocalized" :label="t('difficulty')" />
+
+              <div class="field">
+                <span class="field-label">Puzzle code</span>
+                <div class="join-row">
+                  <input v-model="puzzleCodeInput" class="text" type="text" placeholder="BBSG1-..." />
+                  <button class="btn ghost" type="button" @click="loadPuzzleFromCode">Load</button>
+                </div>
+                <div class="mp-err" v-if="puzzleCodeError">{{ puzzleCodeError }}</div>
+                <div class="btn-row" style="grid-template-columns: 1fr">
+                  <button class="btn" type="button" @click="copyPuzzleCode">Copy current puzzle code</button>
+                </div>
+              </div>
             </div>
 
             <div class="btn-row">

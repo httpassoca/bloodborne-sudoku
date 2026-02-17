@@ -77,6 +77,21 @@ export function solve(grid: Grid): boolean {
   return false
 }
 
+// Deterministic solver (stable for share codes)
+export function solveDeterministic(grid: Grid): boolean {
+  const pos = findEmpty(grid)
+  if (!pos) return true
+  const [r, c] = pos
+  for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9] as const) {
+    if (isValidPlacement(grid, r, c, n)) {
+      grid[r][c] = n
+      if (solveDeterministic(grid)) return true
+      grid[r][c] = 0
+    }
+  }
+  return false
+}
+
 // Count solutions up to `limit` (for uniqueness testing)
 export function countSolutions(grid: Grid, limit = 2): number {
   const pos = findEmpty(grid)
