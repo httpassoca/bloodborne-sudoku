@@ -4,6 +4,8 @@ All notable changes to **bloodborne-sudoku** will be documented in this file.
 
 ## Unreleased
 
+- Add Husky pre-commit hook to run tests/typecheck and require CHANGELOG.md updates for code changes.
+
 ## 2026-02-17
 
 - Added a “works forever” puzzle share code that encodes the starting grid (`BBSG1-...`).

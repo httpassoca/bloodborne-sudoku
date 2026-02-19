@@ -1,0 +1,37 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+set -e
+
+# Fast checks
+npm test
+npm run typecheck
+
+# Enforce changelog updates on commits that change code
+STAGED_FILES=$(git diff --cached --name-only)
+
+# If only CHANGELOG.md is staged, allow.
+ONLY_CHANGELOG=true
+for f in $STAGED_FILES; do
+  if [ "$f" != "CHANGELOG.md" ]; then
+    ONLY_CHANGELOG=false
+    break
+  fi
+done
+
+if [ "$ONLY_CHANGELOG" = "false" ]; then
+  HAS_CHANGELOG=false
+  for f in $STAGED_FILES; do
+    if [ "$f" = "CHANGELOG.md" ]; then
+      HAS_CHANGELOG=true
+      break
+    fi
+  done
+
+  if [ "$HAS_CHANGELOG" = "false" ]; then
+    echo "\n❌ CHANGELOG.md must be updated and staged for every commit that changes the code." >&2
+    echo "   Tip: add a short bullet under '## Unreleased'." >&2
+    echo "   Then: git add CHANGELOG.md" >&2
+    exit 1
+  fi
+fi
