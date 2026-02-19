@@ -4,6 +4,7 @@ All notable changes to **bloodborne-sudoku** will be documented in this file.
 
 ## Unreleased
 
+- Add `.mise.toml` to pin engine versions (Node) and refresh README dev instructions.
 - Add Husky pre-commit hook to run tests/typecheck and require CHANGELOG.md updates for code changes (and keep Husky v10 compatibility).
 
 ## 2026-02-17

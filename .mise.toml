@@ -1,0 +1,7 @@
+[tools]
+# Keep aligned with GitHub Actions (see .github/workflows/ci.yml)
+node = "22.20.0"
+
+[env]
+# Local dev should use .env.local (not committed)
+# Example in .env.example
