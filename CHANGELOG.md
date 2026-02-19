@@ -4,11 +4,24 @@ All notable changes to **bloodborne-sudoku** will be documented in this file.
 
 ## Unreleased
 
-- Tooltips (custom component, focus + hover)
-- Insert-mode indicator improvements
-- A11y improvements
+## 2026-02-17
+
+- Added a “works forever” puzzle share code that encodes the starting grid (`BBSG1-...`).
+- Added a puzzle code load/copy UI in Hunt Setup.
+- Added Google login (Supabase Auth OAuth).
+- Added cloud game history (games, scores, dates, duration) with RLS policies and a history modal.
+- History UX polish: duration formatting, click-to-copy puzzle codes.
 
 ## 2026-02-12
+
+- Added custom Tooltip component (smooth, works on focus + hover) and removed most `title` attributes.
+- Improved insert-mode indicator behavior (reacts to keyboard modifiers only when playing).
+- Improved a11y (select ARIA wiring, focus behavior, icon labeling).
+- Added CI workflow to run typecheck + unit tests + build on push.
+- Added Supabase serverless multiplayer scaffold (co-op/versus).
+- Multiplayer UX: accordion panel, CustomSelect for mode, player selection highlighting with pastel colors.
+- Draft/undo/redo improvements (includes drafts; Ctrl/Cmd+Shift+Z redo) and draft cleanup now covers row/col/box.
+- Timer fixes (visibility-aware active play time + UI update).
 
 - Migrated project to TypeScript.
 - Added Vitest unit tests for sudoku generation/conflicts and logic solver.
