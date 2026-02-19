@@ -1244,6 +1244,7 @@ watch(
             </div>
           </div>
 
+          <!-- Theme toggle (available on mobile too; tooltip only on desktop) -->
           <Tooltip v-if="!isMobile" :text="theme === 'dark' ? 'Light mode' : 'Dark mode'" placement="bottom">
             <button
               class="icon-btn"
@@ -1254,8 +1255,18 @@ watch(
               <component :is="theme === 'dark' ? Sun : Moon" class="vol" aria-hidden="true" />
             </button>
           </Tooltip>
+          <button
+            v-else
+            class="icon-btn"
+            type="button"
+            :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+            @click="toggleTheme"
+          >
+            <component :is="theme === 'dark' ? Sun : Moon" class="vol" aria-hidden="true" />
+          </button>
 
-          <Tooltip v-else text="Draft (center marks)" placement="bottom">
+          <!-- Draft toggle remains on mobile -->
+          <Tooltip v-if="isMobile" text="Draft (center marks)" placement="bottom">
             <button
               class="icon-btn draft-toggle"
               type="button"
@@ -1793,9 +1804,10 @@ h1 {
 
 .main {
   display: grid;
-  place-items: center;
   width: 100%;
-  overflow-x: clip;
+  justify-items: center;
+  align-items: start;
+  overflow-x: visible;
 }
 
 .layout {
@@ -1816,7 +1828,7 @@ h1 {
   min-width: 0;
   display: grid;
   gap: 10px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .mode-ind {
