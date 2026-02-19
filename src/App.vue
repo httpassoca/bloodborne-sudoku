@@ -1,19 +1,21 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
-import { makeCell, gridToCells, serializeCell, deserializeCell } from './lib/cell'
+import { gridToCells } from './lib/cell'
 import { useTheme } from './composables/useTheme'
 import { useLang } from './composables/useLang'
 import { useMultiplayer } from './composables/useMultiplayer'
+import { useGamePersistence } from './composables/useGamePersistence'
+import { useActivePlayTimer } from './composables/useActivePlayTimer'
+import { readBestScore, scoreFor, writeBestScore } from './lib/scoring'
 import { Volume2, Sun, Moon, Pencil, Eraser, Undo2, Clock, AlertOctagon, Palette } from 'lucide-vue-next'
 import SudokuBoard from './components/SudokuBoard.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
 import Tooltip from './components/Tooltip.vue'
 import Accordion from './components/Accordion.vue'
-import { DIFFICULTIES, cloneGrid, computeConflicts, generatePuzzle, isSolved, solveDeterministic } from './lib/sudoku'
+import { DIFFICULTIES, computeConflicts, generatePuzzle, isSolved } from './lib/sudoku'
 import { nextLogicalMove } from './lib/logicSolver'
 import { makeSupabase } from './lib/multiplayer'
-import { decodePuzzle, encodePuzzle } from './lib/puzzleCode'
 import { signInWithGoogle, signOut } from './lib/auth'
 
 
@@ -97,166 +99,6 @@ async function saveFinishedGameToCloud() {
 }
 
 
-// Persist/restore game state (and user info already stored elsewhere)
-const GAME_KEY = 'bbs_game_v3'
-const BUILD_VERSION = '2026-02-12'
-
-/* cell serialization lives in src/lib/cell.ts */
-
-function serializeGame() {
-  // limit stack sizes to keep storage small
-  const UNDO_MAX = 250
-  const undoStack = Array.isArray(state.undoStack) ? state.undoStack.slice(-UNDO_MAX) : []
-  const redoStack = Array.isArray(state.redoStack) ? state.redoStack.slice(-UNDO_MAX) : []
-
-  return {
-    v: 3,
-    build: BUILD_VERSION,
-    at: Date.now(),
-    difficultyKey: difficultyKey.value,
-    startedAt: state.startedAt,
-    activePlayMs: state.activePlayMs,
-    finished: state.finished,
-    finishedAt: state.finishedAt,
-    errors: state.errors,
-    score: state.score,
-    puzzle: state.puzzle,
-    solution: state.solution,
-    cells: state.cells.map((row) => row.map((c) => serializeCell(c))),
-    selected: state.selected,
-    multiSelected: Array.from(state.multiSelected || []),
-    undoStack,
-    redoStack,
-  }
-}
-
-function restoreGame(raw) {
-  if (!raw || raw.v !== 3) return false
-  if (!Array.isArray(raw.cells) || raw.cells.length !== 9) return false
-
-  difficultyKey.value = raw.difficultyKey || difficultyKey.value
-
-  state.startedAt = Number(raw.startedAt || Date.now())
-  state.activePlayMs = Number(raw.activePlayMs || 0)
-  state.finished = !!raw.finished
-  state.finishedAt = raw.finishedAt ? Number(raw.finishedAt) : null
-  state.errors = Number(raw.errors || 0)
-  state.score = Number(raw.score || 0)
-
-  state.puzzle = raw.puzzle || null
-  state.solution = raw.solution || null
-
-  state.cells = raw.cells.map((row) => (Array.isArray(row) ? row.map((c) => deserializeCell(c)) : []))
-  // ensure 9x9
-  if (state.cells.length !== 9 || state.cells.some((r) => r.length !== 9)) return false
-
-  state.selected = raw.selected && Number.isInteger(raw.selected.row) ? raw.selected : { row: 0, col: 0 }
-  state.multiSelected = new Set(Array.isArray(raw.multiSelected) ? raw.multiSelected : ['0,0'])
-
-  state.undoStack = Array.isArray(raw.undoStack) ? raw.undoStack : []
-  state.redoStack = Array.isArray(raw.redoStack) ? raw.redoStack : []
-  state.lastCompletes = { rows: new Set(), cols: new Set(), boxes: new Set() }
-  state.flashKey = ''
-
-  // hide overlays on restore
-  state.victoryVisible = false
-  state.companion.running = false
-  state.companion.highlightKey = ''
-  state.companion.message = t('companion.quiet')
-
-  return true
-}
-
-let saveTimer = null
-function scheduleSaveGame() {
-  try {
-    if (saveTimer) window.clearTimeout(saveTimer)
-    saveTimer = window.setTimeout(() => {
-      localStorage.setItem(GAME_KEY, JSON.stringify(serializeGame()))
-    }, 180)
-  } catch {
-    // ignore storage errors
-  }
-}
-
-function loadSavedGame() {
-  try {
-    const raw = localStorage.getItem(GAME_KEY)
-    if (!raw) return false
-    const ok = restoreGame(JSON.parse(raw))
-    // reset tick baseline on restore
-    lastActiveAt.value = null
-    return ok
-  } catch {
-    return false
-  }
-}
-
-const puzzleCodeInput = ref('')
-const puzzleCodeError = ref('')
-
-function currentPuzzleCode() {
-  try {
-    return encodePuzzle(state.puzzle)
-  } catch {
-    return ''
-  }
-}
-
-async function copyPuzzleCode() {
-  const code = currentPuzzleCode()
-  if (!code) return
-  try {
-    await navigator.clipboard.writeText(code)
-  } catch {
-    // ignore
-  }
-}
-
-function loadPuzzleFromCode() {
-  puzzleCodeError.value = ''
-  try {
-    const puzzle = decodePuzzle(puzzleCodeInput.value)
-
-    const sol = cloneGrid(puzzle)
-    const ok = solveDeterministic(sol)
-    if (!ok) throw new Error('No solution')
-
-    state.puzzle = puzzle
-    state.solution = sol
-    state.cells = gridToCells(puzzle)
-
-    state.selected = { row: 0, col: 0 }
-    state.multiSelected = new Set(['0,0'])
-
-    state.startedAt = Date.now()
-    state.activePlayMs = 0
-    lastActiveAt.value = null
-    state.finished = false
-    state.finishedAt = null
-
-    state.victoryVisible = false
-    state.score = 0
-    state.errors = 0
-    state.undoStack = []
-    state.redoStack = []
-
-    scheduleSaveGame()
-  } catch (e) {
-    puzzleCodeError.value = String(e?.message || e)
-  }
-}
-
-function resetSavedGame() {
-  try {
-    localStorage.removeItem(GAME_KEY)
-  } catch {
-    // ignore
-  }
-  newHunt()
-  scheduleSaveGame()
-}
-
 const state = reactive({
   puzzle: null,
   solution: null,
@@ -288,6 +130,18 @@ const state = reactive({
     decision: { r: -1, c: -1, n: 0, kind: '' },
   },
 })
+
+// Persist/restore game state (and puzzle codes)
+const {
+  scheduleSaveGame,
+  loadSavedGame,
+  resetSavedGame,
+  puzzleCodeInput,
+  puzzleCodeError,
+  currentPuzzleCode,
+  copyPuzzleCode,
+  loadPuzzleFromCode,
+} = useGamePersistence({ state, difficultyKey, lastActiveAt, t, newHunt: () => newHunt() })
 
 const {
   PASTEL_COLORS,
@@ -379,30 +233,8 @@ function mobilePress(n) {
   else handleNumber(n, 'value', 'user')
 }
 
-function bestKey(diffKey) {
-  return `bbs_best_${diffKey}`
-}
-
 function loadBestScore() {
-  const v = Number(localStorage.getItem(bestKey(difficultyKey.value)) || 0)
-  state.bestScore = Number.isFinite(v) ? v : 0
-}
-
-function scoreFor(diffKey, seconds) {
-  const mult =
-    diffKey === 'easy'
-      ? 1
-      : diffKey === 'medium'
-        ? 1.35
-        : diffKey === 'hard'
-          ? 1.9
-          : diffKey === 'expert'
-            ? 2.6
-            : 3.3
-
-  const base = Math.round(12000 * mult)
-  const penalty = Math.round(seconds * 20 * mult)
-  return Math.max(0, base - penalty)
+  state.bestScore = readBestScore(difficultyKey.value)
 }
 
 function newHunt({ fromNetwork = false } = {}) {
@@ -486,64 +318,8 @@ const currentGrid = computed(() => state.cells.map((r) => r.map((c) => c.value))
 const conflicts = computed(() => computeConflicts(currentGrid.value))
 
 // realtime timer tick (only while tab is visible)
-const nowTick = ref(Date.now())
-let timerId = null
+const { elapsedSeconds, timeLabel } = useActivePlayTimer({ state, lastActiveAt })
 
-
-function stopNowTick() {
-  if (timerId) {
-    window.clearInterval(timerId)
-    timerId = null
-  }
-  if (lastActiveAt.value && !state.finished) {
-    state.activePlayMs += Math.max(0, Date.now() - lastActiveAt.value)
-  }
-  lastActiveAt.value = null
-}
-
-function startNowTick() {
-  if (timerId) return
-  if (!state.finished) lastActiveAt.value = Date.now()
-  timerId = window.setInterval(() => (nowTick.value = Date.now()), 250)
-}
-
-function syncNowTickActive() {
-  if (typeof document === 'undefined') return
-  // Do NOT gate on focus/blur: some browsers load unfocused and timer would stay at 0.
-  if (document.visibilityState === 'visible') startNowTick()
-  else stopNowTick()
-}
-
-onMounted(() => {
-  // Start immediately if visible.
-  syncNowTickActive()
-  document.addEventListener('visibilitychange', syncNowTickActive)
-})
-
-onBeforeUnmount(() => {
-  stopNowTick()
-  document.removeEventListener('visibilitychange', syncNowTickActive)
-})
-
-const elapsedSeconds = computed(() => {
-  // depend on nowTick so the UI updates while active
-  const now = nowTick.value
-
-  if (state.finished) {
-    // if finished, activePlayMs is already finalized in stopNowTick() or on finish
-    return Math.max(0, Math.floor(state.activePlayMs / 1000))
-  }
-
-  const live = lastActiveAt.value ? now - lastActiveAt.value.value : 0
-  return Math.max(0, Math.floor((state.activePlayMs + Math.max(0, live)) / 1000))
-})
-
-const timeLabel = computed(() => {
-  const sec = elapsedSeconds.value
-  const m = Math.floor(sec / 60)
-  const s = sec % 60
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-})
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n))
@@ -632,9 +408,9 @@ function tryFinishCheck() {
     const score = scoreFor(difficultyKey.value, elapsedSeconds.value)
     state.score = score
 
-    const best = Number(localStorage.getItem(bestKey(difficultyKey.value)) || 0)
+    const best = readBestScore(difficultyKey.value)
     if (!Number.isFinite(best) || score > best) {
-      localStorage.setItem(bestKey(difficultyKey.value), String(score))
+      writeBestScore(difficultyKey.value, score)
       state.bestScore = score
     } else {
       state.bestScore = best
