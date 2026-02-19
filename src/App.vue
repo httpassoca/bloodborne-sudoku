@@ -1,5 +1,9 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
+import { makeCell, gridToCells, serializeCell, deserializeCell } from './lib/cell'
+import { useTheme } from './composables/useTheme'
+import { useLang } from './composables/useLang'
+import { useMultiplayer } from './composables/useMultiplayer'
 import { Volume2, Sun, Moon, Pencil, Eraser, Undo2, Clock, AlertOctagon, Palette } from 'lucide-vue-next'
 import SudokuBoard from './components/SudokuBoard.vue'
 import CustomSelect from './components/CustomSelect.vue'
@@ -8,75 +12,23 @@ import Tooltip from './components/Tooltip.vue'
 import Accordion from './components/Accordion.vue'
 import { DIFFICULTIES, cloneGrid, computeConflicts, generatePuzzle, isSolved, solveDeterministic } from './lib/sudoku'
 import { nextLogicalMove } from './lib/logicSolver'
-import { makeClientId, makeRoomCode, makeSupabase, normalizeName } from './lib/multiplayer'
+import { makeSupabase } from './lib/multiplayer'
 import { decodePuzzle, encodePuzzle } from './lib/puzzleCode'
 import { signInWithGoogle, signOut } from './lib/auth'
-import { LANGS, t as tt } from './i18n'
 
-function makeCell(value, given) {
-  return {
-    value: value || 0,
-    given: !!given,
-    cornerNotes: new Set(),
-    centerNotes: new Set(),
-  }
-}
-
-function gridToCells(puzzleGrid) {
-  return puzzleGrid.map((row) => row.map((v) => makeCell(v, v !== 0)))
-}
 
 const difficultyKey = ref('easy')
 
-// Multiplayer (Supabase Realtime)
-const mpEnabled = ref(true)
-const mpMode = ref('coop') // 'coop' | 'versus'
-const mpModeOptions = [
-  { key: 'coop', label: 'Co-op (same board)' },
-  { key: 'versus', label: 'Versus (race)' },
-]
-const mpUiOpen = ref(true)
-const mpRoom = ref('')
-const mpName = ref(localStorage.getItem('bbs_name') || 'Hunter')
-watch(mpName, () => localStorage.setItem('bbs_name', mpName.value), { immediate: true })
+const { lang, langOptions, t } = useLang()
+const { theme } = useTheme()
 
-const mpClientId = makeClientId()
+const lastActiveAt = ref(null)
 
 // Auth/session
 const authUser = ref(null)
 const authEmail = computed(() => authUser.value?.email || '')
 
-const PASTEL_COLORS = [
-  { key: 'rose', label: 'Rose', value: '#f6a6b2' },
-  { key: 'peach', label: 'Peach', value: '#f7c59f' },
-  { key: 'lemon', label: 'Lemon', value: '#f6e58d' },
-  { key: 'mint', label: 'Mint', value: '#b8f2e6' },
-  { key: 'sky', label: 'Sky', value: '#a0c4ff' },
-  { key: 'lilac', label: 'Lilac', value: '#cdb4db' },
-]
-
-function randomPastel() {
-  return PASTEL_COLORS[Math.floor(Math.random() * PASTEL_COLORS.length)].value
-}
-
-const mpColor = ref(localStorage.getItem('bbs_mp_color') || randomPastel())
-watch(mpColor, () => localStorage.setItem('bbs_mp_color', mpColor.value), { immediate: true })
-
-const mpColorOpen = ref(false)
-function setMpColor(c) {
-  mpColor.value = c
-  mpColorOpen.value = false
-  if (mpIsActive()) {
-    mpChannel.track({ name: normalizeName(mpName.value), color: mpColor.value, sel: keyOf(state.selected.row, state.selected.col), joinedAt: Date.now() })
-  }
-}
-
 let supabase = null
-let mpChannel = null
-const mpConnected = ref(false)
-const mpPlayers = ref([])
-const mpError = ref('')
-
 function getSupabase() {
   if (!supabase) supabase = makeSupabase()
   return supabase
@@ -144,227 +96,12 @@ async function saveFinishedGameToCloud() {
   }
 }
 
-function initials(name) {
-  const t = String(name || '').trim()
-  if (!t) return '?'
-  const parts = t.split(/\s+/).filter(Boolean)
-  const a = parts[0]?.[0] || ''
-  const b = parts.length > 1 ? parts[parts.length - 1]?.[0] : ''
-  return (a + b).toUpperCase().slice(0, 2) || '?'
-}
-
-const otherSelections = computed(() => {
-  // map cellKey -> [{ color, label }]
-  const map = new Map()
-  for (const p of mpPlayers.value || []) {
-    if (!p || p.id === mpClientId) continue
-    const sel = p.sel
-    if (!sel) continue
-    const arr = map.get(sel) || []
-    arr.push({ color: p.color || '#b8f2e6', label: initials(p.name), name: p.name || '' })
-    map.set(sel, arr)
-  }
-  return map
-})
-
-function mpIsActive() {
-  return mpEnabled.value && mpConnected.value && mpChannel && mpRoom.value
-}
-
-function mpBroadcast(payload) {
-  if (!mpIsActive()) return
-  mpChannel.send({ type: 'broadcast', event: 'msg', payload })
-}
-
-function coopExportState() {
-  return {
-    v: 1,
-    puzzle: state.puzzle,
-    solution: state.solution,
-    cells: state.cells.map((row) =>
-      row.map((c) => ({
-        value: c.value || 0,
-        cornerNotes: Array.from(c.cornerNotes || []),
-        centerNotes: Array.from(c.centerNotes || []),
-      }))
-    ),
-    startedAt: state.startedAt,
-    at: Date.now(),
-  }
-}
-
-function coopApplyState(s) {
-  if (!s?.puzzle || !Array.isArray(s?.cells)) return
-  state.puzzle = s.puzzle
-  state.solution = s.solution || state.solution
-  state.cells = s.cells.map((row, r) =>
-    row.map((raw, c) => {
-      const given = (s.puzzle?.[r]?.[c] || 0) !== 0
-      const cell = makeCell(raw.value || 0, given)
-      cell.cornerNotes = new Set(Array.isArray(raw.cornerNotes) ? raw.cornerNotes : [])
-      cell.centerNotes = new Set(Array.isArray(raw.centerNotes) ? raw.centerNotes : [])
-      return cell
-    })
-  )
-  state.startedAt = Number(s.startedAt || Date.now())
-  state.activePlayMs = 0
-  lastActiveAt = null
-  state.finished = false
-  state.finishedAt = null
-  state.victoryVisible = false
-  state.score = 0
-  state.errors = 0
-  state.undoStack = []
-  state.redoStack = []
-  scheduleSaveGame()
-}
-
-async function mpDisconnect() {
-  mpConnected.value = false
-  mpPlayers.value = []
-  mpError.value = ''
-  if (mpChannel) {
-    try {
-      await mpChannel.unsubscribe()
-    } catch {
-      // ignore
-    }
-  }
-  mpChannel = null
-}
-
-async function mpConnect(room, mode) {
-  mpError.value = ''
-  mpRoom.value = room
-  mpMode.value = mode
-
-  if (!supabase) {
-    try {
-      supabase = makeSupabase()
-    } catch (e) {
-      mpError.value = String(e?.message || e)
-      return
-    }
-  }
-
-  await mpDisconnect()
-
-  const ch = supabase.channel(`room:${room}`, {
-    config: {
-      presence: { key: mpClientId },
-      broadcast: { ack: false },
-    },
-  })
-
-  ch.on('presence', { event: 'sync' }, () => {
-    const state = ch.presenceState()
-    const out = []
-    for (const k of Object.keys(state)) {
-      const arr = state[k] || []
-      for (const p of arr) out.push({ id: k, ...(p || {}) })
-    }
-    mpPlayers.value = out
-  })
-
-  ch.on('broadcast', { event: 'msg' }, ({ payload }) => {
-    const msg = payload
-    if (!msg || msg.by === mpClientId) return
-
-    if (msg.type === 'hello') {
-      // if coop and we have a state, offer it
-      if (mpMode.value === 'coop') {
-        mpBroadcast({ type: 'state_response', by: mpClientId, to: msg.by, state: coopExportState(), at: Date.now() })
-      }
-    }
-
-    if (msg.type === 'state_request' && mpMode.value === 'coop') {
-      mpBroadcast({ type: 'state_response', by: mpClientId, to: msg.by, state: coopExportState(), at: Date.now() })
-    }
-
-    if (msg.type === 'state_response' && mpMode.value === 'coop') {
-      if (msg.to !== mpClientId) return
-      coopApplyState(msg.state)
-    }
-
-    if (msg.type === 'coop_patch' && mpMode.value === 'coop') {
-      const p = msg.patch
-      const cell = state.cells?.[p.r]?.[p.c]
-      if (!cell || cell.given) return
-      if (typeof p.value === 'number') cell.value = p.value
-      if (Array.isArray(p.cornerNotes)) cell.cornerNotes = new Set(p.cornerNotes)
-      if (Array.isArray(p.centerNotes)) cell.centerNotes = new Set(p.centerNotes)
-      scheduleSaveGame()
-    }
-
-    if (msg.type === 'versus_stats' && mpMode.value === 'versus') {
-      // store in presence? keep simple: rely on presence state
-    }
-  })
-
-  const { error } = await ch.subscribe(async (status) => {
-    if (status === 'SUBSCRIBED') {
-      mpConnected.value = true
-      // multiplayer: disable companion
-      if (state.companion.running) stopCompanion()
-      state.companion.running = false
-
-      ch.track({ name: normalizeName(mpName.value), color: mpColor.value, sel: keyOf(state.selected.row, state.selected.col), joinedAt: Date.now() })
-      mpBroadcast({ type: 'hello', by: mpClientId, name: normalizeName(mpName.value), mode: mpMode.value, at: Date.now() })
-      if (mpMode.value === 'coop') {
-        // ask for state; if none replies, keep local
-        mpBroadcast({ type: 'state_request', by: mpClientId, at: Date.now() })
-      }
-    }
-  })
-
-  if (error) mpError.value = String(error.message || error)
-  mpChannel = ch
-}
-
-const lang = ref(localStorage.getItem('bbs_lang') || 'en')
-watch(
-  lang,
-  () => {
-    localStorage.setItem('bbs_lang', lang.value)
-  },
-  { immediate: true }
-)
-
-function t(key, params) {
-  return tt(lang.value, key, params)
-}
-
-const langOptions = LANGS
-
-// theme
-const theme = ref(localStorage.getItem('bbs_theme') || 'dark')
-function applyTheme() {
-  document.documentElement.dataset.theme = theme.value
-  localStorage.setItem('bbs_theme', theme.value)
-}
-watch(theme, applyTheme, { immediate: true })
 
 // Persist/restore game state (and user info already stored elsewhere)
 const GAME_KEY = 'bbs_game_v3'
 const BUILD_VERSION = '2026-02-12'
 
-function serializeCell(cell) {
-  return {
-    value: cell.value || 0,
-    given: !!cell.given,
-    cornerNotes: Array.from(cell.cornerNotes || []),
-    centerNotes: Array.from(cell.centerNotes || []),
-  }
-}
-
-function deserializeCell(raw) {
-  const value = Number(raw?.value || 0)
-  const given = !!raw?.given
-  const cell = makeCell(value, given)
-  cell.cornerNotes = new Set(Array.isArray(raw?.cornerNotes) ? raw.cornerNotes : [])
-  cell.centerNotes = new Set(Array.isArray(raw?.centerNotes) ? raw.centerNotes : [])
-  return cell
-}
+/* cell serialization lives in src/lib/cell.ts */
 
 function serializeGame() {
   // limit stack sizes to keep storage small
@@ -448,7 +185,7 @@ function loadSavedGame() {
     if (!raw) return false
     const ok = restoreGame(JSON.parse(raw))
     // reset tick baseline on restore
-    lastActiveAt = null
+    lastActiveAt.value = null
     return ok
   } catch {
     return false
@@ -494,7 +231,7 @@ function loadPuzzleFromCode() {
 
     state.startedAt = Date.now()
     state.activePlayMs = 0
-    lastActiveAt = null
+    lastActiveAt.value = null
     state.finished = false
     state.finishedAt = null
 
@@ -551,6 +288,30 @@ const state = reactive({
     decision: { r: -1, c: -1, n: 0, kind: '' },
   },
 })
+
+const {
+  PASTEL_COLORS,
+  mpEnabled,
+  mpMode,
+  mpModeOptions,
+  mpUiOpen,
+  mpRoom,
+  mpName,
+  mpClientId,
+  mpColor,
+  mpColorOpen,
+  mpConnected,
+  mpPlayers,
+  mpError,
+  otherSelections,
+  mpIsActive,
+  mpBroadcast,
+  mpConnect,
+  mpDisconnect,
+  mpTrack,
+  setMpColor,
+  makeRoomCode,
+} = useMultiplayer({ state, keyOf, scheduleSaveGame, stopCompanion, lastActiveAt })
 
 // When the user starts navigating with arrows, we disable hover effects until the user uses the mouse again.
 const keyboardNav = ref(false)
@@ -654,7 +415,7 @@ function newHunt({ fromNetwork = false } = {}) {
 
   state.startedAt = Date.now()
   state.activePlayMs = 0
-  lastActiveAt = null
+  lastActiveAt.value = null
   state.finished = false
   state.finishedAt = null
 
@@ -728,22 +489,21 @@ const conflicts = computed(() => computeConflicts(currentGrid.value))
 const nowTick = ref(Date.now())
 let timerId = null
 
-let lastActiveAt = null
 
 function stopNowTick() {
   if (timerId) {
     window.clearInterval(timerId)
     timerId = null
   }
-  if (lastActiveAt && !state.finished) {
-    state.activePlayMs += Math.max(0, Date.now() - lastActiveAt)
+  if (lastActiveAt.value && !state.finished) {
+    state.activePlayMs += Math.max(0, Date.now() - lastActiveAt.value)
   }
-  lastActiveAt = null
+  lastActiveAt.value = null
 }
 
 function startNowTick() {
   if (timerId) return
-  if (!state.finished) lastActiveAt = Date.now()
+  if (!state.finished) lastActiveAt.value = Date.now()
   timerId = window.setInterval(() => (nowTick.value = Date.now()), 250)
 }
 
@@ -774,7 +534,7 @@ const elapsedSeconds = computed(() => {
     return Math.max(0, Math.floor(state.activePlayMs / 1000))
   }
 
-  const live = lastActiveAt ? now - lastActiveAt : 0
+  const live = lastActiveAt.value ? now - lastActiveAt.value.value : 0
   return Math.max(0, Math.floor((state.activePlayMs + Math.max(0, live)) / 1000))
 })
 
@@ -815,9 +575,7 @@ function selectCell({ row, col, mode = 'replace', additive = false, source = 'us
 
   const k = keyOf(r, c)
 
-  if (source === 'user' && mpIsActive()) {
-    mpChannel.track({ name: normalizeName(mpName.value), color: mpColor.value, sel: k, joinedAt: Date.now() })
-  }
+  if (source === 'user') mpTrack(k)
 
   if (mode === 'toggle') {
     if (state.multiSelected.has(k)) state.multiSelected.delete(k)
@@ -863,9 +621,9 @@ function tryFinishCheck() {
   if (!state.solution) return
   if (isSolved(currentGrid.value, state.solution)) {
     // finalize timer
-    if (lastActiveAt) {
-      state.activePlayMs += Math.max(0, Date.now() - lastActiveAt)
-      lastActiveAt = null
+    if (lastActiveAt.value) {
+      state.activePlayMs += Math.max(0, Date.now() - lastActiveAt.value)
+      lastActiveAt.value = null
     }
 
     state.finished = true
