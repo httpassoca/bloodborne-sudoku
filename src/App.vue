@@ -1511,7 +1511,7 @@ watch(
             </div>
           </div>
 
-          <div class="sidepanel-section">
+          <div class="sidepanel-section" v-if="!isMobile">
             <div class="remaining-row">
               <RemainingNumbers :grid="currentGrid" :title="t('remaining')" :all-text="t('allNumbersPlaced')" />
 
@@ -1873,7 +1873,7 @@ h1 {
 
 .board-wrap :deep(.board) {
   width: 100%;
-  max-width: 100%;
+  max-width: calc(100vw - calc(14px + env(safe-area-inset-right)));
 }
 
 
