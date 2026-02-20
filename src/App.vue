@@ -1280,7 +1280,7 @@ watch(
         </div>
       </div>
 
-      <div class="hud" aria-label="HUD">
+      <div v-if="!isMobile" class="hud" aria-label="HUD">
         <div class="hud-group" aria-label="Score">
           <div class="hud-item">
             <span class="hud-k">{{ t('score') }}</span>
@@ -1317,6 +1317,24 @@ watch(
     <main class="main">
       <div class="layout">
         <section class="board-wrap" aria-label="Sudoku">
+          <!-- Mobile HUD: compact row above the grid -->
+          <div v-if="isMobile" class="hud hud-mobile" aria-label="HUD">
+            <div class="hud-mobile-item" aria-label="Score">
+              <span class="hud-mobile-k">{{ t('score') }}</span>
+              <span class="hud-mobile-v">{{ state.score }}</span>
+            </div>
+
+            <div class="hud-mobile-item" aria-label="Errors">
+              <span class="hud-mobile-k">{{ t('errors') }}</span>
+              <span class="hud-mobile-v hud-v-mono">{{ state.errors }}</span>
+            </div>
+
+            <div class="hud-mobile-item" aria-label="Timer">
+              <span class="hud-mobile-k">{{ t('time') }}</span>
+              <span class="hud-mobile-v hud-v-mono">{{ timeLabel }}</span>
+            </div>
+          </div>
+
           <SudokuBoard
             :cells="state.cells"
             :selected="state.selected"
@@ -1642,12 +1660,12 @@ watch(
 }
 
 .num {
-  height: 52px;
+  height: 3.25rem;
   border: 0;
   background: transparent;
   color: color-mix(in oklab, var(--bone) 88%, white);
   font-weight: 900;
-  font-size: 28px;
+  font-size: 1.75rem;
   font-family: 'Cinzel', ui-serif, Georgia, 'Times New Roman', Times, serif;
   cursor: pointer;
 }
@@ -1661,14 +1679,14 @@ watch(
 
 @media (max-width: 560px) {
   .num {
-    height: 50px;
-    font-size: 26px;
+    height: 3.125rem;
+    font-size: 1.625rem;
   }
 }
 
 .tool {
-  height: 44px;
-  border-radius: 14px;
+  height: 2.75rem;
+  border-radius: 0.875rem;
   border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
   background: color-mix(in oklab, var(--panel) 78%, transparent);
   color: var(--bone);
@@ -1800,6 +1818,34 @@ h1 {
   width: 16px;
   height: 16px;
   opacity: 0.85;
+}
+
+/* Mobile HUD bar (above grid) */
+.hud-mobile {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 0.85rem;
+  background: color-mix(in oklab, var(--panel) 86%, transparent);
+  border: 1px solid color-mix(in oklab, var(--ink) 50%, transparent);
+}
+
+.hud-mobile-item {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.hud-mobile-k {
+  font-size: 0.75rem;
+  opacity: 0.72;
+  white-space: nowrap;
+}
+
+.hud-mobile-v {
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
 }
 
 .main {

@@ -13,6 +13,7 @@ export const MESSAGES: Record<string, any> = {
 
     score: 'Score',
     best: 'Best',
+    errors: 'Errors',
 
     huntSetup: 'Hunt Setup',
     difficulty: 'Difficulty',
@@ -83,6 +84,7 @@ export const MESSAGES: Record<string, any> = {
 
     score: 'Pontuação',
     best: 'Recorde',
+    errors: 'Erros',
 
     huntSetup: 'Preparação da Caçada',
     difficulty: 'Dificuldade',
