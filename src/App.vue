@@ -1317,20 +1317,6 @@ watch(
     <main class="main">
       <div class="layout">
         <section class="board-wrap" aria-label="Sudoku">
-          <SudokuBoard
-            :cells="state.cells"
-            :selected="state.selected"
-            :multi-selected="state.multiSelected"
-            :conflicts="conflicts"
-            :disable-hover="keyboardNav"
-            :disable-same-number="state.companion.running"
-            :highlight-key="state.companion.highlightKey"
-            :decision="state.companion.decision"
-            :flash-key="state.flashKey"
-            :other-selections="otherSelections"
-            :class="{ 'error-shake': errorActive }"
-            @select="(pos) => selectCell(pos)"
-          />
 
           <!-- mode indicator moved under Status -->
 

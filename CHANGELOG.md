@@ -4,7 +4,7 @@ All notable changes to **bloodborne-sudoku** will be documented in this file.
 
 ## Unreleased
 
-- Fixing mobile board width
+- Fixing mobile board widt
 - Refactor App.vue: extract cell helpers into `src/lib/cell.ts`, move theme/lang/multiplayer logic into composables, and extract persistence/timer/scoring into dedicated modules.
 - Mobile fix: restore theme toggle on mobile and adjust layout alignment/overflow to avoid clipped board.
 - Add `.mise.toml` to pin engine versions (Node) and refresh README dev instructions.
