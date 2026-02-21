@@ -167,6 +167,8 @@ const {
   makeRoomCode,
 } = useMultiplayer({ state, keyOf, scheduleSaveGame, stopCompanion, lastActiveAt })
 
+const companionUiOpen = ref(false)
+
 // When the user starts navigating with arrows, we disable hover effects until the user uses the mouse again.
 const keyboardNav = ref(false)
 
@@ -316,6 +318,25 @@ watch(
 
 const currentGrid = computed(() => state.cells.map((r) => r.map((c) => c.value)))
 const conflicts = computed(() => computeConflicts(currentGrid.value))
+
+const remainingCounts = computed(() => {
+  const counts = Array(10).fill(0)
+  for (const row of currentGrid.value) {
+    for (const v of row) {
+      const n = Number(v)
+      if (n >= 1 && n <= 9) counts[n]++
+    }
+  }
+  return counts
+})
+
+const mobileNumbers = computed(() => {
+  const out = []
+  for (let n = 1; n <= 9; n++) {
+    if (remainingCounts.value[n] < 9) out.push(n)
+  }
+  return out
+})
 
 // realtime timer tick (only while tab is visible)
 const { elapsedSeconds, timeLabel } = useActivePlayTimer({ state, lastActiveAt })
@@ -1381,46 +1402,48 @@ watch(
             </div>
 
             <div class="pad-nums" aria-label="Numbers">
-              <button v-for="n in 9" :key="n" class="num" type="button" @click="mobilePress(n)">{{ n }}</button>
+              <button v-for="n in mobileNumbers" :key="n" class="num" type="button" @click="mobilePress(n)">{{ n }}</button>
             </div>
           </section>
 
-          <!-- Companion (moved below game) -->
-          <section class="companion-panel instructions" aria-label="Companion">
-            <div class="companion-head">
-              <img class="companion-img" :src="companionImgUrl" alt="Companion" />
-              <div>
-                <div class="sidepanel-title" style="margin:0">{{ t('companionTitle') }}</div>
-                <div class="companion-sub">{{ t('companion.decisionHint') }}</div>
-              </div>
-            </div>
-
-            <div class="btn-row companion-row">
-              <button class="btn" type="button" @click="toggleCompanionKill" :disabled="mpIsActive()" :aria-disabled="mpIsActive()">
-                {{ state.companion.running ? t('stopCompanion') : t('companionKill') }}
-              </button>
-            </div>
-
-            <div class="speed">
-              <div class="speed-head">
-                <span class="speed-label">{{ t('companionSpeed') }}</span>
-                <span class="speed-value">{{ (state.companion.speedMs / 1000).toFixed(2) }}s</span>
+          <!-- Companion (closeable, closed by default) -->
+          <Accordion v-model="companionUiOpen" :title="t('companionTitle')">
+            <section class="companion-panel instructions" aria-label="Companion">
+              <div class="companion-head">
+                <img class="companion-img" :src="companionImgUrl" alt="Companion" />
+                <div>
+                  <div class="sidepanel-title" style="margin:0">{{ t('companionTitle') }}</div>
+                  <div class="companion-sub">{{ t('companion.decisionHint') }}</div>
+                </div>
               </div>
 
-              <select v-model="state.companion.speedPreset" class="speed-select">
-                <option v-for="p in speedPresets" :key="p.key" :value="p.key">{{ p.label }}</option>
-              </select>
-            </div>
+              <div class="btn-row companion-row">
+                <button class="btn" type="button" @click="toggleCompanionKill" :disabled="mpIsActive()" :aria-disabled="mpIsActive()">
+                  {{ state.companion.running ? t('stopCompanion') : t('companionKill') }}
+                </button>
+              </div>
 
-            <div class="companion-log" :class="{ active: state.companion.running }">
-              <div class="companion-title">{{ t('companionLog') }}</div>
-              <div class="companion-text">{{ state.companion.message }}</div>
-              <div class="companion-hint">{{ t('companion.decisionHint') }}</div>
-            </div>
-          </section>
+              <div class="speed">
+                <div class="speed-head">
+                  <span class="speed-label">{{ t('companionSpeed') }}</span>
+                  <span class="speed-value">{{ (state.companion.speedMs / 1000).toFixed(2) }}s</span>
+                </div>
 
-          <!-- Instructions (not a dropdown): subtle until hover -->
-          <section class="instructions" aria-label="Instructions">
+                <select v-model="state.companion.speedPreset" class="speed-select">
+                  <option v-for="p in speedPresets" :key="p.key" :value="p.key">{{ p.label }}</option>
+                </select>
+              </div>
+
+              <div class="companion-log" :class="{ active: state.companion.running }">
+                <div class="companion-title">{{ t('companionLog') }}</div>
+                <div class="companion-text">{{ state.companion.message }}</div>
+                <div class="companion-hint">{{ t('companion.decisionHint') }}</div>
+              </div>
+            </section>
+          </Accordion>
+
+          <!-- Controls panel hidden on mobile -->
+          <section v-if="!isMobile" class="instructions" aria-label="Instructions">
             <div class="instructions-title">{{ t('controlsTitle') }}</div>
             <ul class="help">
               <li><kbd>1</kbd>–<kbd>9</kbd> {{ t('c_place') }}</li>
