@@ -5,6 +5,7 @@ All notable changes to **bloodborne-sudoku** will be documented in this file.
 ## Unreleased
 
 - Fixing mobile board width
+- UI: replace Sudoku board CSS grid layout with flexbox (no CSS Grid for the board).
 - Refactor App.vue: extract cell helpers into `src/lib/cell.ts`, move theme/lang/multiplayer logic into composables, and extract persistence/timer/scoring into dedicated modules.
 - Mobile fix: restore theme toggle on mobile and adjust layout alignment/overflow to avoid clipped board.
 - Mobile UX: add compact HUD bar above the grid (score/errors/time) and switch some mobile sizing to `rem`.

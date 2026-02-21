@@ -103,12 +103,16 @@ function decisionFlags(r, c) {
 
 <style scoped>
 .board {
-  display: grid;
-  grid-template-columns: repeat(9, 1fr);
-  gap: 0;
+  display: flex;
+  flex-wrap: wrap;
   padding: 0;
   border-radius: 0;
   background: transparent;
   border: 2px solid color-mix(in oklab, var(--ink) 70%, transparent);
+}
+
+.board-cell {
+  flex: 0 0 calc(100% / 9);
+  max-width: calc(100% / 9);
 }
 </style>
