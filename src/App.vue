@@ -13,7 +13,8 @@ import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
 import Tooltip from './components/Tooltip.vue'
 import Accordion from './components/Accordion.vue'
-import { DIFFICULTIES, computeConflicts, generatePuzzle, isSolved } from './lib/sudoku'
+import { DIFFICULTIES, computeConflicts, countSolutions, generatePuzzle, isSolved, solveDeterministic, cloneGrid, emptyGrid } from './lib/sudoku'
+import { encodePuzzle } from './lib/puzzleCode'
 import { nextLogicalMove } from './lib/logicSolver'
 import { makeSupabase } from './lib/multiplayer'
 import { signInWithGoogle, signOut } from './lib/auth'
@@ -168,6 +169,109 @@ const {
 } = useMultiplayer({ state, keyOf, scheduleSaveGame, stopCompanion, lastActiveAt })
 
 const companionUiOpen = ref(false)
+
+// Puzzle creator (custom sudoku -> share code)
+const creatorOpen = ref(false)
+const creatorGrid = ref(emptyGrid())
+const creatorCells = computed(() => gridToCells(creatorGrid.value))
+const creatorSelected = ref({ row: 0, col: 0 })
+const creatorMultiSelected = ref(new Set(['0,0']))
+const creatorError = ref('')
+const creatorCode = ref('')
+
+const creatorConflicts = computed(() => computeConflicts(creatorGrid.value))
+
+function creatorSelect(pos) {
+  creatorSelected.value = { row: pos.row, col: pos.col }
+  creatorMultiSelected.value = new Set([`${pos.row},${pos.col}`])
+}
+
+function creatorSetValue(v) {
+  const r = creatorSelected.value.row
+  const c = creatorSelected.value.col
+  if (r < 0 || c < 0) return
+  const next = cloneGrid(creatorGrid.value)
+  next[r][c] = v
+  creatorGrid.value = next
+}
+
+function creatorClear() {
+  creatorGrid.value = emptyGrid()
+  creatorError.value = ''
+  creatorCode.value = ''
+  creatorSelected.value = { row: 0, col: 0 }
+  creatorMultiSelected.value = new Set(['0,0'])
+}
+
+function creatorBuildCode() {
+  creatorError.value = ''
+  creatorCode.value = ''
+
+  if (creatorConflicts.value.size) {
+    creatorError.value = 'Your grid has conflicts (duplicates). Fix them before generating a code.'
+    return
+  }
+
+  // Must be solvable
+  const attempt = cloneGrid(creatorGrid.value)
+  const ok = solveDeterministic(attempt)
+  if (!ok) {
+    creatorError.value = 'This puzzle has no solution.'
+    return
+  }
+
+  // Must be unique
+  const uniqTest = cloneGrid(creatorGrid.value)
+  const solutions = countSolutions(uniqTest, 2)
+  if (solutions !== 1) {
+    creatorError.value = solutions === 0 ? 'This puzzle has no solution.' : 'This puzzle has multiple solutions (not unique).'
+    return
+  }
+
+  creatorCode.value = encodePuzzle(creatorGrid.value)
+}
+
+async function creatorCopyCode() {
+  if (!creatorCode.value) creatorBuildCode()
+  if (!creatorCode.value) return
+  await copyText(creatorCode.value)
+}
+
+function creatorPlayPuzzle() {
+  if (!creatorCode.value) creatorBuildCode()
+  if (!creatorCode.value) return
+
+  // Build solution from deterministic solver for consistent experience
+  const sol = cloneGrid(creatorGrid.value)
+  solveDeterministic(sol)
+
+  state.puzzle = cloneGrid(creatorGrid.value)
+  state.solution = sol
+  state.cells = gridToCells(state.puzzle)
+
+  state.selected = { row: 0, col: 0 }
+  state.multiSelected = new Set(['0,0'])
+
+  state.startedAt = Date.now()
+  state.activePlayMs = 0
+  lastActiveAt.value = null
+  state.finished = false
+  state.finishedAt = null
+  state.victoryVisible = false
+  state.score = 0
+  state.errors = 0
+  state.undoStack = []
+  state.redoStack = []
+  state.lastCompletes = { rows: new Set(), cols: new Set(), boxes: new Set() }
+  state.flashKey = ''
+
+  stopCompanion()
+  state.companion.message = t('companion.quiet')
+  loadBestScore()
+
+  // close panel on mobile
+  creatorOpen.value = false
+}
 
 // When the user starts navigating with arrows, we disable hover effects until the user uses the mouse again.
 const keyboardNav = ref(false)
@@ -1539,6 +1643,50 @@ watch(
                   <button class="btn" type="button" @click="copyPuzzleCode">Copy current puzzle code</button>
                 </div>
               </div>
+
+              <Accordion v-model="creatorOpen" title="Create & share">
+                <div class="mp-meta" style="margin-top:-2px">
+                  Make your own sudoku by placing the <b>givens</b>, then generate a code you can share.
+                </div>
+
+                <SudokuBoard
+                  :cells="creatorCells"
+                  :selected="creatorSelected"
+                  :multi-selected="creatorMultiSelected"
+                  :conflicts="creatorConflicts"
+                  :disable-hover="false"
+                  :disable-same-number="true"
+                  highlight-key=""
+                  flash-key=""
+                  :other-selections="new Map()"
+                  @select="creatorSelect"
+                />
+
+                <div class="pad-nums" style="margin-top: 6px">
+                  <button v-for="n in 9" :key="n" class="num" type="button" @click="creatorSetValue(n)">{{ n }}</button>
+                </div>
+
+                <div class="btn-row" style="grid-template-columns: 1fr 1fr">
+                  <button class="btn ghost" type="button" @click="creatorSetValue(0)">Clear cell</button>
+                  <button class="btn ghost" type="button" @click="creatorClear">Reset grid</button>
+                </div>
+
+                <div class="btn-row" style="grid-template-columns: 1fr 1fr">
+                  <button class="btn" type="button" @click="creatorBuildCode">Generate code</button>
+                  <button class="btn ghost" type="button" :disabled="!creatorCode" @click="creatorCopyCode">Copy</button>
+                </div>
+
+                <div v-if="creatorError" class="mp-err">{{ creatorError }}</div>
+
+                <label class="field" v-if="creatorCode">
+                  <span class="field-label">Share code</span>
+                  <input :value="creatorCode" class="text" type="text" readonly />
+                </label>
+
+                <div class="btn-row" style="grid-template-columns: 1fr">
+                  <button class="btn" type="button" :disabled="!creatorCode" @click="creatorPlayPuzzle">Play this puzzle</button>
+                </div>
+              </Accordion>
             </div>
 
             <div class="btn-row">
