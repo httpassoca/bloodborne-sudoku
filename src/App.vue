@@ -1793,18 +1793,20 @@ watch(
           Click a cell, then use <b>1–9</b> on your keyboard (or the buttons). Move with <b>arrow keys</b>. Press <b>Enter</b> to generate.
         </div>
 
-        <SudokuBoard
-          :cells="creatorCells"
-          :selected="creatorSelected"
-          :multi-selected="creatorMultiSelected"
-          :conflicts="creatorConflicts"
-          :disable-hover="false"
-          :disable-same-number="true"
-          highlight-key=""
-          flash-key=""
-          :other-selections="new Map()"
-          @select="creatorSelect"
-        />
+        <div class="creator-board-wrap">
+          <SudokuBoard
+            :cells="creatorCells"
+            :selected="creatorSelected"
+            :multi-selected="creatorMultiSelected"
+            :conflicts="creatorConflicts"
+            :disable-hover="false"
+            :disable-same-number="true"
+            highlight-key=""
+            flash-key=""
+            :other-selections="new Map()"
+            @select="creatorSelect"
+          />
+        </div>
 
         <div class="pad-nums" style="margin-top: 10px">
           <button v-for="n in 9" :key="n" class="num" type="button" @click="creatorSetValue(n)">{{ n }}</button>
@@ -2671,6 +2673,17 @@ kbd {
   border: 1px solid color-mix(in oklab, var(--ink) 55%, transparent);
   box-shadow: 0 28px 110px rgba(0, 0, 0, 0.75);
   padding: 14px;
+}
+
+.creator-board-wrap {
+  width: 100%;
+  max-width: min(560px, 90vw);
+  margin: 0 auto;
+}
+
+.creator-board-wrap :deep(.board) {
+  width: 100%;
+  max-width: 100%;
 }
 
 .history-head {
