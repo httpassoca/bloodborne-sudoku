@@ -7,6 +7,7 @@ All notable changes to **bloodborne-sudoku** will be documented in this file.
 - Puzzle creator UX: open in a modal via a plus button; support arrows + number keys for faster entry; generate/share a `BBSG1-...` puzzle code.
 - Puzzle creator: limit the grid size inside the modal to match the in-game board size.
 - Puzzle codes: support `?code=BBSG1-...` links (copy/share puzzle links).
+- Creator modal: disable main game controls while creating; creation is desktop-only.
 - Fixing mobile board width
 - UI: replace Sudoku board CSS grid layout with flexbox (no CSS Grid for the board).
 - Mobile UX: hide keypad numbers that are already fully placed; hide Controls panel on mobile; make Companion panel closeable and closed by default.

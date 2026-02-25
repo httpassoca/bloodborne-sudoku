@@ -209,6 +209,9 @@ const creatorModalEl = ref(null)
 const creatorConflicts = computed(() => computeConflicts(creatorGrid.value))
 
 function openCreatorModal() {
+  // Desktop only
+  if (isMobile.value) return
+
   creatorModalOpen.value = true
   creatorError.value = ''
   // focus for keyboard controls
@@ -1219,6 +1222,9 @@ function syncHeldModifiers(e) {
 }
 
 function onKeyDown(e) {
+  // While creating a puzzle, game controls must be disabled.
+  if (creatorModalOpen.value) return
+
   syncHeldModifiers(e)
 
   // only reflect modifier-based mode when the game is being played
@@ -1280,6 +1286,12 @@ function onKeyDown(e) {
 }
 
 function onPointerDown(e) {
+  // While creating a puzzle, don't let clicks affect the main game state.
+  if (creatorModalOpen.value) {
+    boardActive.value = false
+    return
+  }
+
   dismissVictoryIfVisible()
   keyboardNav.value = false
 
@@ -1298,7 +1310,6 @@ function onKeyUp(e) {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
-  window.addEventListener('keydown', creatorOnKeydown)
   window.addEventListener('keyup', onKeyUp)
   window.addEventListener('pointerdown', onPointerDown)
   window.addEventListener('pointermove', onPointerMove)
@@ -1306,7 +1317,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown)
-  window.removeEventListener('keydown', creatorOnKeydown)
   window.removeEventListener('keyup', onKeyUp)
   window.removeEventListener('pointerdown', onPointerDown)
   window.removeEventListener('pointermove', onPointerMove)
@@ -1756,7 +1766,7 @@ watch(
           <div class="sidepanel-section">
             <div class="sidepanel-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px">
               <span>{{ t('huntSetup') }}</span>
-              <Tooltip text="Create puzzle" placement="left">
+              <Tooltip v-if="!isMobile" text="Create puzzle" placement="left">
                 <button class="icon-btn" type="button" aria-label="Create puzzle" @click="openCreatorModal">
                   <Plus aria-hidden="true" />
                 </button>
@@ -1833,6 +1843,7 @@ watch(
         class="history-inner"
         tabindex="0"
         @keydown="creatorOnKeydown"
+        @pointerdown.stop
       >
         <div class="history-head">
           <div class="sidepanel-title" style="margin:0">Create & share</div>
