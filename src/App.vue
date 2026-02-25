@@ -58,6 +58,32 @@ async function copyText(s) {
   }
 }
 
+function puzzleLink(code) {
+  const c = String(code || '').trim()
+  if (!c) return ''
+  try {
+    const u = new URL(window.location.href)
+    u.searchParams.set('code', c)
+    // keep things tidy
+    u.hash = ''
+    return u.toString()
+  } catch {
+    return ''
+  }
+}
+
+async function copyPuzzleLink(code) {
+  const link = puzzleLink(code)
+  if (!link) return
+  await copyText(link)
+}
+
+async function copyCurrentPuzzleLink() {
+  const code = currentPuzzleCode()
+  if (!code) return
+  await copyPuzzleLink(code)
+}
+
 async function loadHistory() {
   if (!authUser.value) return
   historyError.value = ''
@@ -450,10 +476,33 @@ function newHunt({ fromNetwork = false } = {}) {
   loadBestScore()
 }
 
+function getPuzzleCodeFromUrl() {
+  try {
+    const u = new URL(window.location.href)
+    const code = (u.searchParams.get('code') || u.searchParams.get('p') || '').trim()
+    return code || ''
+  } catch {
+    return ''
+  }
+}
+
+function tryLoadPuzzleFromUrl() {
+  const code = getPuzzleCodeFromUrl()
+  if (!code) return false
+
+  puzzleCodeInput.value = code
+  loadPuzzleFromCode()
+  // If it loaded, clear the input error (loadPuzzleFromCode sets it on failure)
+  return !puzzleCodeError.value
+}
+
 onMounted(async () => {
   loadBestScore()
   const restored = loadSavedGame()
   if (!restored) newHunt()
+
+  // URL puzzle code should override restore/new hunt
+  tryLoadPuzzleFromUrl()
 
   // Auth bootstrap
   try {
@@ -1724,8 +1773,9 @@ watch(
                   <button class="btn ghost" type="button" @click="loadPuzzleFromCode">Load</button>
                 </div>
                 <div class="mp-err" v-if="puzzleCodeError">{{ puzzleCodeError }}</div>
-                <div class="btn-row" style="grid-template-columns: 1fr">
-                  <button class="btn" type="button" @click="copyPuzzleCode">Copy current puzzle code</button>
+                <div class="btn-row" style="grid-template-columns: 1fr 1fr">
+                  <button class="btn" type="button" @click="copyPuzzleCode">Copy code</button>
+                  <button class="btn ghost" type="button" @click="copyCurrentPuzzleLink">Copy link</button>
                 </div>
               </div>
 
@@ -1819,7 +1869,11 @@ watch(
 
         <div class="btn-row" style="grid-template-columns: 1fr 1fr">
           <button class="btn" type="button" @click="creatorBuildCode">Generate code</button>
-          <button class="btn ghost" type="button" :disabled="!creatorCode" @click="creatorCopyCode">Copy</button>
+          <button class="btn ghost" type="button" :disabled="!creatorCode" @click="creatorCopyCode">Copy code</button>
+        </div>
+
+        <div class="btn-row" style="grid-template-columns: 1fr">
+          <button class="btn ghost" type="button" :disabled="!creatorCode" @click="copyPuzzleLink(creatorCode)">Copy link</button>
         </div>
 
         <div v-if="creatorError" class="mp-err">{{ creatorError }}</div>
