@@ -7,7 +7,7 @@ import { useMultiplayer } from './composables/useMultiplayer'
 import { useGamePersistence } from './composables/useGamePersistence'
 import { useActivePlayTimer } from './composables/useActivePlayTimer'
 import { readBestScore, scoreFor, writeBestScore } from './lib/scoring'
-import { Volume2, Sun, Moon, Pencil, Eraser, Undo2, Clock, AlertOctagon, Palette } from 'lucide-vue-next'
+import { Volume2, Sun, Moon, Pencil, Eraser, Undo2, Clock, AlertOctagon, Palette, Plus } from 'lucide-vue-next'
 import SudokuBoard from './components/SudokuBoard.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import RemainingNumbers from './components/RemainingNumbers.vue'
@@ -171,15 +171,27 @@ const {
 const companionUiOpen = ref(false)
 
 // Puzzle creator (custom sudoku -> share code)
-const creatorOpen = ref(false)
+const creatorModalOpen = ref(false)
 const creatorGrid = ref(emptyGrid())
 const creatorCells = computed(() => gridToCells(creatorGrid.value))
 const creatorSelected = ref({ row: 0, col: 0 })
 const creatorMultiSelected = ref(new Set(['0,0']))
 const creatorError = ref('')
 const creatorCode = ref('')
+const creatorModalEl = ref(null)
 
 const creatorConflicts = computed(() => computeConflicts(creatorGrid.value))
+
+function openCreatorModal() {
+  creatorModalOpen.value = true
+  creatorError.value = ''
+  // focus for keyboard controls
+  nextTick(() => creatorModalEl.value?.focus?.())
+}
+
+function closeCreatorModal() {
+  creatorModalOpen.value = false
+}
 
 function creatorSelect(pos) {
   creatorSelected.value = { row: pos.row, col: pos.col }
@@ -201,6 +213,70 @@ function creatorClear() {
   creatorCode.value = ''
   creatorSelected.value = { row: 0, col: 0 }
   creatorMultiSelected.value = new Set(['0,0'])
+}
+
+function creatorMove(dr, dc) {
+  const r0 = creatorSelected.value.row
+  const c0 = creatorSelected.value.col
+  const r = Math.min(8, Math.max(0, r0 + dr))
+  const c = Math.min(8, Math.max(0, c0 + dc))
+  creatorSelected.value = { row: r, col: c }
+  creatorMultiSelected.value = new Set([`${r},${c}`])
+}
+
+function creatorOnKeydown(e) {
+  if (!creatorModalOpen.value) return
+  if (!e) return
+
+  // If the user is typing in an input, don't steal keys.
+  const tag = String(e.target?.tagName || '').toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) return
+
+  if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    creatorMove(-1, 0)
+    return
+  }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    creatorMove(1, 0)
+    return
+  }
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault()
+    creatorMove(0, -1)
+    return
+  }
+  if (e.key === 'ArrowRight') {
+    e.preventDefault()
+    creatorMove(0, 1)
+    return
+  }
+
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    closeCreatorModal()
+    return
+  }
+
+  // numbers
+  if (/^[1-9]$/.test(e.key)) {
+    e.preventDefault()
+    creatorSetValue(Number(e.key))
+    return
+  }
+
+  if (e.key === '0' || e.key === 'Backspace' || e.key === 'Delete') {
+    e.preventDefault()
+    creatorSetValue(0)
+    return
+  }
+
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    creatorBuildCode()
+    return
+  }
 }
 
 function creatorBuildCode() {
@@ -269,8 +345,8 @@ function creatorPlayPuzzle() {
   state.companion.message = t('companion.quiet')
   loadBestScore()
 
-  // close panel on mobile
-  creatorOpen.value = false
+  // close modal
+  creatorModalOpen.value = false
 }
 
 // When the user starts navigating with arrows, we disable hover effects until the user uses the mouse again.
@@ -1173,6 +1249,7 @@ function onKeyUp(e) {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keydown', creatorOnKeydown)
   window.addEventListener('keyup', onKeyUp)
   window.addEventListener('pointerdown', onPointerDown)
   window.addEventListener('pointermove', onPointerMove)
@@ -1180,6 +1257,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keydown', creatorOnKeydown)
   window.removeEventListener('keyup', onKeyUp)
   window.removeEventListener('pointerdown', onPointerDown)
   window.removeEventListener('pointermove', onPointerMove)
@@ -1627,7 +1705,14 @@ watch(
           </Accordion>
 
           <div class="sidepanel-section">
-            <div class="sidepanel-title">{{ t('huntSetup') }}</div>
+            <div class="sidepanel-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px">
+              <span>{{ t('huntSetup') }}</span>
+              <Tooltip text="Create puzzle" placement="left">
+                <button class="icon-btn" type="button" aria-label="Create puzzle" @click="openCreatorModal">
+                  <Plus aria-hidden="true" />
+                </button>
+              </Tooltip>
+            </div>
 
             <div class="setup-row">
               <CustomSelect v-model="difficultyKey" :options="difficultiesLocalized" :label="t('difficulty')" />
@@ -1644,49 +1729,7 @@ watch(
                 </div>
               </div>
 
-              <Accordion v-model="creatorOpen" title="Create & share">
-                <div class="mp-meta" style="margin-top:-2px">
-                  Make your own sudoku by placing the <b>givens</b>, then generate a code you can share.
-                </div>
 
-                <SudokuBoard
-                  :cells="creatorCells"
-                  :selected="creatorSelected"
-                  :multi-selected="creatorMultiSelected"
-                  :conflicts="creatorConflicts"
-                  :disable-hover="false"
-                  :disable-same-number="true"
-                  highlight-key=""
-                  flash-key=""
-                  :other-selections="new Map()"
-                  @select="creatorSelect"
-                />
-
-                <div class="pad-nums" style="margin-top: 6px">
-                  <button v-for="n in 9" :key="n" class="num" type="button" @click="creatorSetValue(n)">{{ n }}</button>
-                </div>
-
-                <div class="btn-row" style="grid-template-columns: 1fr 1fr">
-                  <button class="btn ghost" type="button" @click="creatorSetValue(0)">Clear cell</button>
-                  <button class="btn ghost" type="button" @click="creatorClear">Reset grid</button>
-                </div>
-
-                <div class="btn-row" style="grid-template-columns: 1fr 1fr">
-                  <button class="btn" type="button" @click="creatorBuildCode">Generate code</button>
-                  <button class="btn ghost" type="button" :disabled="!creatorCode" @click="creatorCopyCode">Copy</button>
-                </div>
-
-                <div v-if="creatorError" class="mp-err">{{ creatorError }}</div>
-
-                <label class="field" v-if="creatorCode">
-                  <span class="field-label">Share code</span>
-                  <input :value="creatorCode" class="text" type="text" readonly />
-                </label>
-
-                <div class="btn-row" style="grid-template-columns: 1fr">
-                  <button class="btn" type="button" :disabled="!creatorCode" @click="creatorPlayPuzzle">Play this puzzle</button>
-                </div>
-              </Accordion>
             </div>
 
             <div class="btn-row">
@@ -1732,6 +1775,63 @@ watch(
       <span>Made for the Hunt. No bells were rung.</span>
     </footer>
 
+
+
+    <div v-if="creatorModalOpen" class="history" role="dialog" aria-label="Create puzzle" @click.self="closeCreatorModal">
+      <div
+        ref="creatorModalEl"
+        class="history-inner"
+        tabindex="0"
+        @keydown="creatorOnKeydown"
+      >
+        <div class="history-head">
+          <div class="sidepanel-title" style="margin:0">Create & share</div>
+          <button class="icon-btn" type="button" aria-label="Close" @click="closeCreatorModal">✕</button>
+        </div>
+
+        <div class="mp-meta" style="margin-top:-2px">
+          Click a cell, then use <b>1–9</b> on your keyboard (or the buttons). Move with <b>arrow keys</b>. Press <b>Enter</b> to generate.
+        </div>
+
+        <SudokuBoard
+          :cells="creatorCells"
+          :selected="creatorSelected"
+          :multi-selected="creatorMultiSelected"
+          :conflicts="creatorConflicts"
+          :disable-hover="false"
+          :disable-same-number="true"
+          highlight-key=""
+          flash-key=""
+          :other-selections="new Map()"
+          @select="creatorSelect"
+        />
+
+        <div class="pad-nums" style="margin-top: 10px">
+          <button v-for="n in 9" :key="n" class="num" type="button" @click="creatorSetValue(n)">{{ n }}</button>
+        </div>
+
+        <div class="btn-row" style="grid-template-columns: 1fr 1fr">
+          <button class="btn ghost" type="button" @click="creatorSetValue(0)">Clear cell</button>
+          <button class="btn ghost" type="button" @click="creatorClear">Reset grid</button>
+        </div>
+
+        <div class="btn-row" style="grid-template-columns: 1fr 1fr">
+          <button class="btn" type="button" @click="creatorBuildCode">Generate code</button>
+          <button class="btn ghost" type="button" :disabled="!creatorCode" @click="creatorCopyCode">Copy</button>
+        </div>
+
+        <div v-if="creatorError" class="mp-err">{{ creatorError }}</div>
+
+        <label class="field" v-if="creatorCode">
+          <span class="field-label">Share code</span>
+          <input :value="creatorCode" class="text" type="text" readonly />
+        </label>
+
+        <div class="btn-row" style="grid-template-columns: 1fr">
+          <button class="btn" type="button" :disabled="!creatorCode" @click="creatorPlayPuzzle">Play this puzzle</button>
+        </div>
+      </div>
+    </div>
     <div v-if="historyOpen" class="history" role="dialog" aria-label="Game history">
       <div class="history-inner">
         <div class="history-head">
@@ -2791,3 +2891,4 @@ kbd {
   }
 }
 </style>
+

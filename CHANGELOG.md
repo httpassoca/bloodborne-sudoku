@@ -4,7 +4,7 @@ All notable changes to **bloodborne-sudoku** will be documented in this file.
 
 ## Unreleased
 
-- Add a puzzle creator UI to enter custom givens, validate uniqueness, and generate/share a `BBSG1-...` puzzle code.
+- Puzzle creator UX: open in a modal via a plus button; support arrows + number keys for faster entry; generate/share a `BBSG1-...` puzzle code.
 - Fixing mobile board width
 - UI: replace Sudoku board CSS grid layout with flexbox (no CSS Grid for the board).
 - Mobile UX: hide keypad numbers that are already fully placed; hide Controls panel on mobile; make Companion panel closeable and closed by default.
